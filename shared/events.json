@@ -1,0 +1,84 @@
+[
+  {
+    "name": "The spark",
+    "time": "2025-03-25T22:23:00+07:00",
+    "description": "The exact minute our story officially began.",
+    "pictures": ["/images/spark.jpg"]
+  },
+  {
+    "name": "First café date",
+    "time": "2025-04-08T18:30:00+07:00",
+    "description": "Laughed over coffee, stayed for the sunset.",
+    "pictures": ["/images/cafe.jpg"]
+  },
+  {
+    "name": "Rainy movie night",
+    "time": "2025-06-12T20:00:00+07:00",
+    "description": "We turned a stormy evening into our own cozy premiere.",
+    "pictures": ["/images/movie.jpg"]
+  },
+  {
+    "name": "Weekend getaway",
+    "time": "2025-08-29T09:00:00+07:00",
+    "description": "A road trip full of playlists, snacks, and new inside jokes.",
+    "pictures": ["/images/getaway.jpg"]
+  },
+  {
+    "name": "Weekend getaway",
+    "time": "2025-08-29T09:00:00+07:00",
+    "description": "A road trip full of playlists, snacks, and new inside jokes.",
+    "pictures": ["/images/getaway.jpg"]
+  },
+  {
+    "name": "Weekend getaway",
+    "time": "2025-08-29T09:00:00+07:00",
+    "description": "A road trip full of playlists, snacks, and new inside jokes.",
+    "pictures": ["/images/getaway.jpg"]
+  },
+  {
+    "name": "Weekend getaway",
+    "time": "2025-08-29T09:00:00+07:00",
+    "description": "A road trip full of playlists, snacks, and new inside jokes.",
+    "pictures": ["/images/getaway.jpg"]
+  },
+  {
+    "name": "Weekend getaway",
+    "time": "2025-08-29T09:00:00+07:00",
+    "description": "A road trip full of playlists, snacks, and new inside jokes.",
+    "pictures": ["/images/getaway.jpg"]
+  },
+  {
+    "name": "Weekend getaway",
+    "time": "2025-08-29T09:00:00+07:00",
+    "description": "A road trip full of playlists, snacks, and new inside jokes.",
+    "pictures": ["/images/getaway.jpg"]
+  },
+  {
+    "name": "Weekend getaway",
+    "time": "2025-08-29T09:00:00+07:00",
+    "description": "A road trip full of playlists, snacks, and new inside jokes.",
+    "pictures": ["/images/getaway.jpg"]
+  },
+  {
+    "name": "Weekend getaway",
+    "time": "2025-08-29T09:00:00+07:00",
+    "description": "A road trip full of playlists, snacks, and new inside jokes.",
+    "pictures": ["/images/getaway.jpg"]
+  },
+  {
+    "name": "Weekend getaway",
+    "time": "2025-08-29T09:00:00+07:00",
+    "description": "A road trip full of playlists, snacks, and new inside jokes.",
+    "pictures": ["/images/getaway.jpg"]
+  },
+  {
+    "name": "Weekend getaway",
+    "time": "2025-08-29T09:00:00+07:00",
+    "description": "A road trip full of playlists, snacks, and new inside jokes.",
+    "pictures": [
+      "/images/getaway.jpg",
+      "/images/getaway.jpg",
+      "/images/getaway.jpg"
+    ]
+  }
+]
