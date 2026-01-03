@@ -1,7 +1,7 @@
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { BASE_DATE, diffParts } from "../../shared/dateDiff";
-import eventsData from "../../shared/events.json";
+import EventAdmin from "./EventAdmin";
 import loveNotes from "../../shared/loveNotes.json";
 import Event from "./Event";
 
@@ -17,6 +17,85 @@ const BASE_TEXT = BASE_DATE.toLocaleString(undefined, {
 
 function pad(value, length = 2) {
   return String(value).padStart(length, "0");
+}
+
+const API_BASE = import.meta.env.VITE_EVENTS_API || "http://localhost:8000";
+
+function AdminPage() {
+  const [authed, setAuthed] = useState(
+    () => localStorage.getItem("adminAuthed") === "true"
+  );
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [events, setEvents] = useState([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!authed) return;
+    const fetchEvents = async () => {
+      setLoading(true);
+      try {
+        const res = await fetch(`${API_BASE}/events`);
+        if (!res.ok) throw new Error("API unavailable");
+        const data = await res.json();
+        setEvents(data);
+      } catch (err) {
+        setEvents([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchEvents();
+  }, [authed]);
+
+  const handleLogin = (e) => {
+    e.preventDefault();
+    const secret = import.meta.env.VITE_ADMIN_PASSWORD || "mtriyeumaihan";
+    if (password === secret) {
+      localStorage.setItem("adminAuthed", "true");
+      setAuthed(true);
+      setError("");
+    } else {
+      setError("Wrong password.");
+    }
+  };
+
+  if (!authed) {
+    return (
+      <main className="app">
+        <section className="note" aria-live="polite">
+          <h2>Admin login</h2>
+          <form className="admin-form" onSubmit={handleLogin}>
+            <label>
+              Password
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+              />
+            </label>
+            <button type="submit">Enter</button>
+            {error ? <p className="admin-status">{error}</p> : null}
+          </form>
+        </section>
+      </main>
+    );
+  }
+
+  return (
+    <main className="app">
+      <header>
+        <h1>Admin Events</h1>
+        <p className="sub">Manage timeline events and pictures.</p>
+        <a href="/" className="timeline-note">
+          ← Back to timeline
+        </a>
+      </header>
+      {loading ? <p className="timeline-note">Loading events...</p> : null}
+      <EventAdmin events={events} setEvents={setEvents} />
+    </main>
+  );
 }
 
 const ClockSentence = memo(function ClockSentence({
@@ -129,10 +208,14 @@ const Totals = memo(function Totals({ totals, prevTotalsRef }) {
 export default function App() {
   const [now, setNow] = useState(() => new Date());
   const [noteIndex, setNoteIndex] = useState(0);
+  const [events, setEvents] = useState(() => []);
+  const [loadingEvents, setLoadingEvents] = useState(false);
+  const [eventsError, setEventsError] = useState("");
   const [typedNote, setTypedNote] = useState("");
   const [notePhase, setNotePhase] = useState("typing");
   const [activeEvent, setActiveEvent] = useState(null);
   const toggleRef = useRef(null);
+  const [path, setPath] = useState(() => window.location.pathname);
 
   const prevDiffRef = useRef(null);
   const prevTotalsRef = useRef({
@@ -143,11 +226,21 @@ export default function App() {
   });
 
   useEffect(() => {
+    const handlePop = () => setPath(window.location.pathname);
+    window.addEventListener("popstate", handlePop);
+    return () => window.removeEventListener("popstate", handlePop);
+  }, []);
+
+  useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(id);
   }, []);
 
   // Theme toggle removed to keep background static
+
+  if (path.startsWith("/admin")) {
+    return <AdminPage />;
+  }
 
   const diff = useMemo(() => diffParts(BASE_DATE, now), [now]);
 
@@ -256,8 +349,30 @@ export default function App() {
     };
   }, [noteIndex]);
 
-  const events = useMemo(() => {
-    const enriched = eventsData
+  useEffect(() => {
+    const API_BASE = import.meta.env.VITE_EVENTS_API || "http://localhost:8000";
+    const fetchEvents = async () => {
+      setLoadingEvents(true);
+      setEventsError("");
+      try {
+        const res = await fetch(`${API_BASE}/events`);
+        if (!res.ok) throw new Error(`Request failed: ${res.status}`);
+        const data = await res.json();
+        setEvents(data);
+      } catch (err) {
+        setEventsError("API unreachable; no events loaded.");
+        setEvents([]);
+      } finally {
+        setLoadingEvents(false);
+      }
+    };
+
+    fetchEvents();
+  }, []);
+
+  const enrichedEvents = useMemo(() => {
+    return [...events]
+      .sort((a, b) => new Date(a.time) - new Date(b.time))
       .map((evt, idx) => {
         const d = new Date(evt.time);
         return {
@@ -270,15 +385,13 @@ export default function App() {
             year: "numeric",
           }),
         };
-      })
-      .sort((a, b) => new Date(a.time) - new Date(b.time));
-    return enriched;
-  }, []);
+      });
+  }, [events]);
 
   const timelineItems = useMemo(() => {
     const items = [];
     let lastMonth = null;
-    events.forEach((evt, idx) => {
+    enrichedEvents.forEach((evt, idx) => {
       if (evt.monthKey !== lastMonth) {
         items.push({
           type: "month",
@@ -290,7 +403,7 @@ export default function App() {
       items.push({ type: "event", data: evt, idx });
     });
     return items;
-  }, [events]);
+  }, [enrichedEvents]);
 
   const cardVariants = {
     hidden: (side) => ({
@@ -331,6 +444,10 @@ export default function App() {
 
       <section className="timeline" aria-label="Our storyline">
         <h2>Our storyline</h2>
+        {eventsError ? <p className="timeline-note">{eventsError}</p> : null}
+        {loadingEvents ? (
+          <p className="timeline-note">Loading events...</p>
+        ) : null}
         <div className="timeline-list">
           {timelineItems.map((item) => {
             if (item.type === "month") {
