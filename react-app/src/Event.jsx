@@ -1,7 +1,13 @@
-import { useEffect, useRef, useState } from "react";
-import { motion, useAnimation, useInView } from "framer-motion";
+import { createPortal } from "react-dom";
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  AnimatePresence,
+  motion,
+  useAnimation,
+  useInView,
+} from "framer-motion";
 
-export default function Event({ event, idx, variants, onOpen }) {
+export default function Event({ event, idx, variants }) {
   const cardRef = useRef(null);
   const inView = useInView(cardRef, {
     margin: "0px 0px -10% 0px",
@@ -12,18 +18,22 @@ export default function Event({ event, idx, variants, onOpen }) {
   const [loopDistance, setLoopDistance] = useState(400);
   const glideControls = useAnimation();
   const [isPaused, setIsPaused] = useState(false);
+  const [activePhoto, setActivePhoto] = useState(null);
 
   const photos = event.pictures ?? [];
-  const basePhotos = (() => {
+  const basePhotos = useMemo(() => {
     if (!photos.length) return [];
     if (photos.length >= 4) return photos;
     const repeats = Math.ceil(4 / photos.length);
     return Array.from({ length: repeats }, () => photos)
       .flat()
       .slice(0, 4);
-  })();
+  }, [photos]);
 
-  const loopedPhotos = basePhotos.length ? [...basePhotos, ...basePhotos] : [];
+  const loopedPhotos = useMemo(
+    () => (basePhotos.length ? [...basePhotos, ...basePhotos] : []),
+    [basePhotos]
+  );
   const direction = event.side === "left" ? 1 : -1;
   const baseDuration = Math.max(8, basePhotos.length * 3 || 8);
   const speedFactor = direction === 1 ? 2 : 0.7; // left slower, right faster
@@ -61,7 +71,6 @@ export default function Event({ event, idx, variants, onOpen }) {
         },
       });
     } else {
-      // Pause without snapping back to 0 to avoid jitter on hover; reset only when offscreen
       glideControls.stop();
       if (!inView) {
         glideControls.set({ x: startX });
@@ -77,74 +86,120 @@ export default function Event({ event, idx, variants, onOpen }) {
     isPaused,
   ]);
 
-  const handleKeyDown = (e) => {
-    if (e.key === "Enter" || e.key === " ") {
-      e.preventDefault();
-      onOpen(event);
+  useEffect(() => {
+    if (!inView && activePhoto) {
+      setActivePhoto(null);
     }
-  };
+  }, [inView, activePhoto]);
+
+  const openPhoto = (src) => setActivePhoto(src);
+
+  useEffect(() => {
+    if (!activePhoto) return undefined;
+
+    const onKey = (e) => {
+      if (e.key === "Escape") {
+        setActivePhoto(null);
+      }
+    };
+
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [activePhoto]);
+
+  const modal = (
+    <AnimatePresence>
+      {activePhoto ? (
+        <motion.div
+          className="photo-modal-backdrop"
+          role="dialog"
+          aria-modal="true"
+          aria-label={`${event.name} photo`}
+          onClick={() => setActivePhoto(null)}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.18, ease: "easeOut" }}
+        >
+          <motion.div
+            className="photo-modal"
+            onClick={(e) => e.stopPropagation()}
+            initial={{ opacity: 0, scale: 0.96, y: 12 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.96, y: 12 }}
+            transition={{ duration: 0.2, ease: "easeOut" }}
+          >
+            <button
+              type="button"
+              className="photo-modal-close"
+              onClick={() => setActivePhoto(null)}
+              aria-label="Close photo"
+            >
+              ×
+            </button>
+            <img src={activePhoto} alt={event.name} />
+          </motion.div>
+        </motion.div>
+      ) : null}
+    </AnimatePresence>
+  );
 
   return (
-    <motion.article
-      className={`timeline-card vertical side-${event.side}`}
-      data-event-id={event.time}
-      data-event-index={idx}
-      ref={cardRef}
-      variants={variants}
-      custom={event.side}
-      initial="hidden"
-      animate={inView ? "visible" : "hidden"}
-      transition={{
-        delay: inView ? Math.min(idx * 0.08, 0.45) : 0,
-      }}
-      whileHover={{
-        scale: 1.02,
-        y: -4,
-        boxShadow: "0 18px 38px rgba(0,0,0,0.35)",
-      }}
-      whileTap={{ scale: 0.995 }}
-      onClick={() => onOpen(event)}
-      onKeyDown={handleKeyDown}
-      role="button"
-      tabIndex={0}
-    >
-      <div className="timeline-dot" aria-hidden="true" />
-      <div className="timeline-line" aria-hidden="true" />
-      <div className="timeline-meta">
-        <p className="event-date">
-          {new Date(event.time).toLocaleString(undefined, {
-            year: "numeric",
-            month: "long",
-            day: "numeric",
-            hour: "2-digit",
-            minute: "2-digit",
-          })}
-        </p>
-        <h3 className="event-name">{event.name}</h3>
-      </div>
-      <p className="event-desc">{event.description}</p>
-      {basePhotos.length ? (
-        <div className="event-photos-clip">
-          <motion.div
-            className="event-photos"
-            ref={photosStripRef}
-            animate={glideControls}
-            onMouseEnter={() => setIsPaused(true)}
-            onMouseLeave={() => setIsPaused(false)}
-            onFocus={() => setIsPaused(true)}
-            onBlur={() => setIsPaused(false)}
-          >
-            {loopedPhotos.map((src, i) => (
-              <img
-                key={`${event.time}-${i}`}
-                src={src}
-                alt={event.name}
-                loading="lazy"
-              />
-            ))}
-          </motion.div>
+    <>
+      <motion.article
+        className={`timeline-card vertical side-${event.side}`}
+        data-event-id={event.time}
+        data-event-index={idx}
+        ref={cardRef}
+        variants={variants}
+        custom={event.side}
+        initial="hidden"
+        animate={inView ? "visible" : "hidden"}
+        transition={{
+          delay: inView ? Math.min(idx * 0.08, 0.45) : 0,
+        }}
+      >
+        <div className="timeline-dot" aria-hidden="true" />
+        <div className="timeline-line" aria-hidden="true" />
+        <div className="timeline-meta">
+          <p className="event-date">
+            {new Date(event.time).toLocaleString(undefined, {
+              year: "numeric",
+              month: "long",
+              day: "numeric",
+            })}
+          </p>
+          <h3 className="event-name">{event.name}</h3>
         </div>
-      ) : null}
-    </motion.article>
+        <p className="event-desc">{event.description}</p>
+        {basePhotos.length ? (
+          <div className="event-photos-clip">
+            <motion.div
+              className="event-photos"
+              ref={photosStripRef}
+              animate={glideControls}
+              onMouseEnter={() => setIsPaused(true)}
+              onMouseLeave={() => setIsPaused(false)}
+              onFocus={() => setIsPaused(true)}
+              onBlur={() => setIsPaused(false)}
+            >
+              {loopedPhotos.map((src, i) => (
+                <img
+                  key={`${event.time}-${i}`}
+                  src={src}
+                  alt={event.name}
+                  loading="lazy"
+                  onClick={() => openPhoto(src)}
+                />
+              ))}
+            </motion.div>
+          </div>
+        ) : null}
+      </motion.article>
+
+      {typeof document !== "undefined"
+        ? createPortal(modal, document.body)
+        : null}
+    </>
   );
 }

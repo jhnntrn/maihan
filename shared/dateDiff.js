@@ -3,7 +3,7 @@ const MS_PER_MINUTE = 60 * MS_PER_SECOND;
 const MS_PER_HOUR = 60 * MS_PER_MINUTE;
 const MS_PER_DAY = 24 * MS_PER_HOUR;
 
-const BASE_DATE_ISO = "2024-03-31T22:23:00+07:00"; // March 31, 2025 10:23 PM GMT+7
+const BASE_DATE_ISO = "2025-03-31T22:23:00+07:00"; // March 31, 2025 10:23 PM GMT+7
 export const BASE_DATE = new Date(BASE_DATE_ISO);
 
 function addYears(date, years) {

@@ -1,6 +1,7 @@
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { BASE_DATE, diffParts } from "../../shared/dateDiff";
+import eventsUrl from "../../shared/events.json?url";
 import EventAdmin from "./EventAdmin";
 import loveNotes from "../../shared/loveNotes.json";
 import Event from "./Event";
@@ -15,12 +16,6 @@ const BASE_TEXT = BASE_DATE.toLocaleString(undefined, {
   timeZoneName: "short",
 });
 
-function pad(value, length = 2) {
-  return String(value).padStart(length, "0");
-}
-
-const API_BASE = import.meta.env.VITE_EVENTS_API || "http://localhost:8000";
-
 function AdminPage() {
   const [authed, setAuthed] = useState(
     () => localStorage.getItem("adminAuthed") === "true"
@@ -29,24 +24,58 @@ function AdminPage() {
   const [error, setError] = useState("");
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [fetchError, setFetchError] = useState("");
+  const [importStatus, setImportStatus] = useState("");
+  const importInputRef = useRef(null);
+
+  const downloadJson = () => {
+    const blob = new Blob([JSON.stringify(events, null, 2)], {
+      type: "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "events.json";
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   useEffect(() => {
     if (!authed) return;
-    const fetchEvents = async () => {
-      setLoading(true);
-      try {
-        const res = await fetch(`${API_BASE}/events`);
-        if (!res.ok) throw new Error("API unavailable");
-        const data = await res.json();
-        setEvents(data);
-      } catch (err) {
+    setLoading(true);
+    setFetchError("");
+    fetch(eventsUrl, { cache: "no-store" })
+      .then((res) => res.json())
+      .then((data) => setEvents(Array.isArray(data) ? data : []))
+      .catch(() => {
+        setFetchError("Could not load events.json");
         setEvents([]);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchEvents();
+      })
+      .finally(() => setLoading(false));
   }, [authed]);
+
+  // Auto-export disabled: manual download/import only
+
+  const handleImportFile = async (file) => {
+    setImportStatus("");
+    if (!file) {
+      setImportStatus("No file selected.");
+      return;
+    }
+    try {
+      const text = await file.text();
+      const parsed = JSON.parse(text);
+      if (!Array.isArray(parsed)) {
+        throw new Error("File must contain a JSON array of events.");
+      }
+      setEvents(parsed);
+      setImportStatus(
+        `Imported ${parsed.length} event${parsed.length === 1 ? "" : "s"}.`
+      );
+    } catch (err) {
+      setImportStatus(err.message || "Import failed.");
+    }
+  };
 
   const handleLogin = (e) => {
     e.preventDefault();
@@ -91,7 +120,29 @@ function AdminPage() {
         <a href="/" className="timeline-note">
           ← Back to timeline
         </a>
+        <button type="button" className="link-button" onClick={downloadJson}>
+          Download events.json
+        </button>
+        <button
+          type="button"
+          className="link-button"
+          onClick={() => importInputRef.current?.click()}
+        >
+          Import events.json
+        </button>
+        <input
+          ref={importInputRef}
+          type="file"
+          accept="application/json"
+          hidden
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) handleImportFile(file);
+            e.target.value = "";
+          }}
+        />
       </header>
+      {importStatus ? <p className="timeline-note">{importStatus}</p> : null}
       {loading ? <p className="timeline-note">Loading events...</p> : null}
       <EventAdmin events={events} setEvents={setEvents} />
     </main>
@@ -121,13 +172,8 @@ const ClockSentence = memo(function ClockSentence({
                   : ", ";
 
               const prevVal = prevDiffRef.current?.[unit.key] ?? unit.value;
-              const padLen = Math.max(
-                unit.padLength ?? 2,
-                String(unit.value).length,
-                String(prevVal).length
-              );
-              const currDigits = pad(unit.value, padLen).split("");
-              const prevDigits = pad(prevVal, padLen).split("");
+              const currDigits = String(unit.value).split("");
+              const prevDigits = String(prevVal).split("");
 
               return (
                 <motion.span
@@ -151,14 +197,15 @@ const ClockSentence = memo(function ClockSentence({
                       </span>
                     ))}
                   </span>
-                  <span className="unit-label"> {unit.label}</span>
-                  {separator}
+                  <span className="unit-label">
+                    {` ${unit.label}${separator}`}
+                  </span>
                 </motion.span>
               );
             })}
           </AnimatePresence>
+          <span className="sentence-end">.</span>
         </span>
-        <span className="sentence-end">.</span>
       </p>
     </section>
   );
@@ -208,8 +255,8 @@ const Totals = memo(function Totals({ totals, prevTotalsRef }) {
 export default function App() {
   const [now, setNow] = useState(() => new Date());
   const [noteIndex, setNoteIndex] = useState(0);
-  const [events, setEvents] = useState(() => []);
-  const [loadingEvents, setLoadingEvents] = useState(false);
+  const [events, setEvents] = useState([]);
+  const [loadingEvents, setLoadingEvents] = useState(true);
   const [eventsError, setEventsError] = useState("");
   const [typedNote, setTypedNote] = useState("");
   const [notePhase, setNotePhase] = useState("typing");
@@ -234,6 +281,19 @@ export default function App() {
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(id);
+  }, []);
+
+  useEffect(() => {
+    setEventsError("");
+    setLoadingEvents(true);
+    fetch(eventsUrl, { cache: "no-store" })
+      .then((res) => res.json())
+      .then((data) => setEvents(Array.isArray(data) ? data : []))
+      .catch(() => {
+        setEventsError("Could not load events.json");
+        setEvents([]);
+      })
+      .finally(() => setLoadingEvents(false));
   }, []);
 
   // Theme toggle removed to keep background static
@@ -349,27 +409,6 @@ export default function App() {
     };
   }, [noteIndex]);
 
-  useEffect(() => {
-    const API_BASE = import.meta.env.VITE_EVENTS_API || "http://localhost:8000";
-    const fetchEvents = async () => {
-      setLoadingEvents(true);
-      setEventsError("");
-      try {
-        const res = await fetch(`${API_BASE}/events`);
-        if (!res.ok) throw new Error(`Request failed: ${res.status}`);
-        const data = await res.json();
-        setEvents(data);
-      } catch (err) {
-        setEventsError("API unreachable; no events loaded.");
-        setEvents([]);
-      } finally {
-        setLoadingEvents(false);
-      }
-    };
-
-    fetchEvents();
-  }, []);
-
   const enrichedEvents = useMemo(() => {
     return [...events]
       .sort((a, b) => new Date(a.time) - new Date(b.time))
@@ -463,7 +502,6 @@ export default function App() {
                 event={item.data}
                 idx={item.idx}
                 variants={cardVariants}
-                onOpen={setActiveEvent}
               />
             );
           })}
@@ -492,8 +530,6 @@ export default function App() {
                 year: "numeric",
                 month: "long",
                 day: "numeric",
-                hour: "2-digit",
-                minute: "2-digit",
               })}
             </p>
             <h3 className="event-detail-name">{activeEvent.name}</h3>

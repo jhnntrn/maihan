@@ -1,7 +1,5 @@
 import { useMemo, useRef, useState } from "react";
 
-const API_BASE = import.meta.env.VITE_EVENTS_API || "http://localhost:8000";
-
 function parsePictures(input) {
   if (!input.trim()) return [];
   return input
@@ -29,6 +27,12 @@ export default function EventAdmin({ events, setEvents }) {
     () => [...events].sort((a, b) => new Date(a.time) - new Date(b.time)),
     [events]
   );
+
+  const normalizeDate = (value) => {
+    if (!value) return "";
+    // Ensure a full datetime string for consistent sorting/storage
+    return `${value}T00:00:00`;
+  };
 
   const addPictures = (list) => {
     const current = picturesList;
@@ -89,54 +93,39 @@ export default function EventAdmin({ events, setEvents }) {
       return;
     }
     setBusy(true);
-    try {
-      const res = await fetch(`${API_BASE}/events`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name,
-          description,
-          time,
-          pictures: parsePictures(picturesInput),
-        }),
-      });
-      if (!res.ok) throw new Error(`Add failed: ${res.status}`);
-      const created = await res.json();
-      setEvents((prev) => [...prev, created]);
-      setName("");
-      setDescription("");
-      setTime("");
-      setPicturesInput("");
-      setStatus("Added event.");
-    } catch (err) {
-      setStatus(err.message || "Failed to add event.");
-    } finally {
-      setBusy(false);
-    }
+    const newEvent = {
+      id:
+        typeof crypto !== "undefined" && crypto.randomUUID
+          ? crypto.randomUUID()
+          : Date.now(),
+      name,
+      description,
+      time: normalizeDate(time),
+      pictures: parsePictures(picturesInput),
+    };
+
+    setEvents((prev) => [...prev, newEvent]);
+    setName("");
+    setDescription("");
+    setTime("");
+    setPicturesInput("");
+    setStatus("Added event (saved locally).");
+    setBusy(false);
   };
 
   const handleDelete = async (id) => {
     setStatus("");
     setBusy(true);
-    try {
-      const res = await fetch(`${API_BASE}/events/${id}`, { method: "DELETE" });
-      if (!res.ok) throw new Error(`Delete failed: ${res.status}`);
-      setEvents((prev) => prev.filter((evt) => evt.id !== id));
-      setStatus("Deleted event.");
-    } catch (err) {
-      setStatus(err.message || "Failed to delete event.");
-    } finally {
-      setBusy(false);
-    }
+    setEvents((prev) => prev.filter((evt) => (evt.id ?? evt.time) !== id));
+    setStatus("Deleted event (local only).");
+    setBusy(false);
   };
 
   return (
     <section className="admin-panel" aria-label="Manage events">
       <div className="admin-header">
         <h3>Manage events</h3>
-        <p className="admin-hint">
-          API base: <code>{API_BASE}</code>
-        </p>
+        <p className="admin-hint">Data is stored locally in your browser.</p>
       </div>
       <form className="admin-form" onSubmit={handleAdd}>
         <label>
@@ -157,9 +146,9 @@ export default function EventAdmin({ events, setEvents }) {
           />
         </label>
         <label>
-          Time
+          Date
           <input
-            type="datetime-local"
+            type="date"
             value={time}
             onChange={(e) => setTime(e.target.value)}
             required
@@ -256,17 +245,13 @@ export default function EventAdmin({ events, setEvents }) {
                   {new Date(evt.time).toLocaleString()}
                 </div>
               </div>
-              {evt.id ? (
-                <button
-                  type="button"
-                  onClick={() => handleDelete(evt.id)}
-                  disabled={busy}
-                >
-                  Delete
-                </button>
-              ) : (
-                <span className="admin-badge">local only</span>
-              )}
+              <button
+                type="button"
+                onClick={() => handleDelete(evt.id ?? evt.time)}
+                disabled={busy}
+              >
+                Delete
+              </button>
             </li>
           ))}
         </ul>
