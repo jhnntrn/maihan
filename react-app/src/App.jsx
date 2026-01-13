@@ -1,20 +1,10 @@
 import { memo, useEffect, useMemo, useRef, useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { BASE_DATE, diffParts } from "../../shared/dateDiff";
 import eventsUrl from "../../shared/events.json?url";
 import EventAdmin from "./EventAdmin";
 import loveNotes from "../../shared/loveNotes.json";
 import Event from "./Event";
-
-const BASE_TEXT = BASE_DATE.toLocaleString(undefined, {
-  year: "numeric",
-  month: "long",
-  day: "numeric",
-  hour: "2-digit",
-  minute: "2-digit",
-  second: "2-digit",
-  timeZoneName: "short",
-});
 
 function AdminPage() {
   const [authed, setAuthed] = useState(
@@ -152,11 +142,13 @@ function AdminPage() {
 const ClockSentence = memo(function ClockSentence({
   visibleUnits,
   prevDiffRef,
+  sentenceIntro,
+  conjunction,
 }) {
   return (
     <section className="sentence" aria-live="polite">
       <p className="sentence-text">
-        <span className="sentence-intro">We have been together for </span>
+        <span className="sentence-intro">{sentenceIntro}</span>
         <span className="sentence-list">
           <AnimatePresence initial={false} mode="popLayout">
             {visibleUnits.map((unit, index) => {
@@ -168,7 +160,7 @@ const ClockSentence = memo(function ClockSentence({
                   : isLast
                   ? ""
                   : isSecondLast
-                  ? " and "
+                  ? conjunction || " and "
                   : ", ";
 
               const prevVal = prevDiffRef.current?.[unit.key] ?? unit.value;
@@ -204,22 +196,37 @@ const ClockSentence = memo(function ClockSentence({
               );
             })}
           </AnimatePresence>
-          <span className="sentence-end">.</span>
         </span>
       </p>
     </section>
   );
 });
 
-const Totals = memo(function Totals({ totals, prevTotalsRef }) {
+const Totals = memo(function Totals({ totals, prevTotalsRef, labels }) {
   const items = useMemo(
     () => [
-      { key: "days", label: "total days", value: totals.days },
-      { key: "hours", label: "total hours", value: totals.hours },
-      { key: "minutes", label: "total minutes", value: totals.minutes },
-      { key: "seconds", label: "total seconds", value: totals.seconds },
+      {
+        key: "days",
+        label: labels?.totalDays || "total days",
+        value: totals.days,
+      },
+      {
+        key: "hours",
+        label: labels?.totalHours || "total hours",
+        value: totals.hours,
+      },
+      {
+        key: "minutes",
+        label: labels?.totalMinutes || "total minutes",
+        value: totals.minutes,
+      },
+      {
+        key: "seconds",
+        label: labels?.totalSeconds || "total seconds",
+        value: totals.seconds,
+      },
     ],
-    [totals]
+    [totals, labels]
   );
 
   return (
@@ -253,6 +260,71 @@ const Totals = memo(function Totals({ totals, prevTotalsRef }) {
 });
 
 export default function App() {
+  const prefersReducedMotion = useReducedMotion();
+  const [isMobile, setIsMobile] = useState(() =>
+    typeof window !== "undefined" ? window.innerWidth <= 768 : false
+  );
+  const [language, setLanguage] = useState(() => {
+    if (typeof window === "undefined") return "en";
+    return localStorage.getItem("lang") || "vi";
+  });
+  const copy = useMemo(
+    () => ({
+      en: {
+        sentenceIntro: "We have been together for ",
+        conjunction: " and ",
+        totalsHeading: "Which means",
+        unitLabels: {
+          years: ["year", "years"],
+          months: ["month", "months"],
+          days: ["day", "days"],
+          hours: ["hour", "hours"],
+          minutes: ["minute", "minutes"],
+          seconds: ["second", "seconds"],
+        },
+        totalDays: "total days",
+        totalHours: "total hours",
+        totalMinutes: "total minutes",
+        totalSeconds: "total seconds",
+        timelineHeading: "Our storyline",
+        loadingEvents: "Loading events...",
+        errorEvents: "Could not load events.",
+        closeDetails: "Close details",
+        closePhoto: "Close photo",
+      },
+      vi: {
+        sentenceIntro: "Bọn mình đã bên nhau được",
+        conjunction: " và ",
+        totalsHeading: "là khoảng",
+        unitLabels: {
+          years: ["năm", "năm"],
+          months: ["tháng", "tháng"],
+          days: ["ngày", "ngày"],
+          hours: ["giờ", "giờ"],
+          minutes: ["phút", "phút"],
+          seconds: ["giây", "giây"],
+        },
+        totalDays: "ngày",
+        totalHours: "giờ",
+        totalMinutes: "phút",
+        totalSeconds: "giây",
+        timelineHeading: "Câu chuyện của tụi mình <3",
+        loadingEvents: "Đang tải sự kiện...",
+        errorEvents: "Không thể tải sự kiện.",
+        closeDetails: "Đóng chi tiết",
+        closePhoto: "Đóng ảnh",
+      },
+    }),
+    []
+  );
+  const randomSeed = useMemo(() => {
+    if (typeof crypto !== "undefined" && crypto.getRandomValues) {
+      const arr = new Uint32Array(1);
+      crypto.getRandomValues(arr);
+      return arr[0] || Date.now();
+    }
+    return Math.floor(Math.random() * 2147483647) || Date.now();
+  }, []);
   const [now, setNow] = useState(() => new Date());
   const [noteIndex, setNoteIndex] = useState(0);
   const [events, setEvents] = useState([]);
@@ -279,6 +351,23 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    const onResize = () => {
+      setIsMobile(window.innerWidth <= 768);
+    };
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+
+  useEffect(() => {
+    if (typeof document !== "undefined") {
+      document.documentElement.lang = language === "vi" ? "vi" : "en";
+    }
+    if (typeof localStorage !== "undefined") {
+      localStorage.setItem("lang", language);
+    }
+  }, [language]);
+
+  useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(id);
   }, []);
@@ -302,40 +391,53 @@ export default function App() {
     return <AdminPage />;
   }
 
+  const locale = language === "vi" ? "vi-VN" : undefined;
+  const t = copy[language] || copy.en;
+  const mobileLightMotion = isMobile && !prefersReducedMotion;
+
   const diff = useMemo(() => diffParts(BASE_DATE, now), [now]);
+
+  const labelFor = (key, value) => {
+    const labels = t.unitLabels?.[key];
+    if (!labels) return value === 1 ? key : `${key}s`;
+    if (Array.isArray(labels)) {
+      return value === 1 ? labels[0] : labels[1];
+    }
+    return labels;
+  };
 
   const visibleUnits = useMemo(() => {
     const units = [
       {
         key: "years",
-        label: diff.years === 1 ? "year" : "years",
+        label: labelFor("years", diff.years),
         value: diff.years,
       },
       {
         key: "months",
-        label: diff.months === 1 ? "month" : "months",
+        label: labelFor("months", diff.months),
         value: diff.months,
       },
       {
         key: "days",
-        label: diff.days === 1 ? "day" : "days",
+        label: labelFor("days", diff.days),
         value: diff.days,
       },
       {
         key: "hours",
-        label: diff.hours === 1 ? "hour" : "hours",
+        label: labelFor("hours", diff.hours),
         value: diff.hours,
         padLength: 2,
       },
       {
         key: "minutes",
-        label: diff.minutes === 1 ? "minute" : "minutes",
+        label: labelFor("minutes", diff.minutes),
         value: diff.minutes,
         padLength: 2,
       },
       {
         key: "seconds",
-        label: diff.seconds === 1 ? "second" : "seconds",
+        label: labelFor("seconds", diff.seconds),
         value: diff.seconds,
         padLength: 2,
       },
@@ -345,7 +447,7 @@ export default function App() {
     if (nonZero.length) return nonZero;
     // If everything is zero (very first tick), show seconds only
     return [units[units.length - 1]];
-  }, [diff]);
+  }, [diff, t]);
 
   useEffect(() => {
     prevDiffRef.current = diff;
@@ -410,22 +512,56 @@ export default function App() {
   }, [noteIndex]);
 
   const enrichedEvents = useMemo(() => {
-    return [...events]
-      .sort((a, b) => new Date(a.time) - new Date(b.time))
-      .map((evt, idx) => {
-        const d = new Date(evt.time);
-        return {
-          ...evt,
-          side: idx % 2 === 0 ? "left" : "right",
-          idx,
-          monthKey: `${d.getFullYear()}-${d.getMonth()}`,
-          monthLabel: d.toLocaleString(undefined, {
-            month: "long",
-            year: "numeric",
-          }),
-        };
+    const sorted = [...events].sort(
+      (a, b) => new Date(a.time) - new Date(b.time)
+    );
+
+    const assignSides = (list) => {
+      // Pseudo-random per page load; still deterministic during a session
+      let seed = randomSeed % 2147483647 || 1;
+
+      const rand = () => {
+        seed = (seed * 48271) % 2147483647;
+        return seed / 2147483647;
+      };
+
+      let lastSide = null;
+      let runLength = 0;
+
+      return list.map(() => {
+        let side = rand() < 0.5 ? "left" : "right";
+
+        if (side === lastSide) {
+          runLength += 1;
+          if (runLength >= 4) {
+            side = side === "left" ? "right" : "left";
+            runLength = 1;
+          }
+        } else {
+          runLength = 1;
+        }
+
+        lastSide = side;
+        return side;
       });
-  }, [events]);
+    };
+
+    const sides = assignSides(sorted);
+
+    return sorted.map((evt, idx) => {
+      const d = new Date(evt.time);
+      return {
+        ...evt,
+        side: sides[idx],
+        idx,
+        monthKey: `${d.getFullYear()}-${d.getMonth()}`,
+        monthLabel: d.toLocaleString(locale, {
+          month: "long",
+          year: "numeric",
+        }),
+      };
+    });
+  }, [events, locale, randomSeed]);
 
   const timelineItems = useMemo(() => {
     const items = [];
@@ -462,18 +598,45 @@ export default function App() {
     },
   };
 
+  const reduceMotion = prefersReducedMotion;
+
   return (
     <main className="app">
-      <header>
-        <p className="eyebrow">For us</p>
-        <h1>Every moment since {BASE_TEXT}</h1>
-        <p className="sub">Counting all the time we’ve been together.</p>
-      </header>
+      <motion.button
+        type="button"
+        className="lang-toggle"
+        data-lang={language}
+        onClick={() => setLanguage((prev) => (prev === "en" ? "vi" : "en"))}
+        aria-label="Toggle language"
+        whileTap={{ scale: 0.95 }}
+        whileHover={{ scale: 1.02 }}
+        transition={{ type: "spring", stiffness: 300, damping: 18 }}
+      >
+        <span className="lang-pill">
+          <span className={`lang-label ${language === "vi" ? "active" : ""}`}>
+            VI
+          </span>
+          <span className={`lang-label ${language === "en" ? "active" : ""}`}>
+            EN
+          </span>
+          <motion.span
+            className="lang-thumb"
+            animate={{ x: language === "vi" ? "0%" : "100%" }}
+            transition={{ type: "spring", stiffness: 320, damping: 24 }}
+          />
+        </span>
+      </motion.button>
+      <header className="hero-spacer" aria-hidden="true" />
 
-      <ClockSentence visibleUnits={visibleUnits} prevDiffRef={prevDiffRef} />
+      <ClockSentence
+        visibleUnits={visibleUnits}
+        prevDiffRef={prevDiffRef}
+        sentenceIntro={t.sentenceIntro}
+        conjunction={t.conjunction}
+      />
 
-      <h2 className="totals-heading">Which means</h2>
-      <Totals totals={totals} prevTotalsRef={prevTotalsRef} />
+      <h2 className="totals-heading">{t.totalsHeading}</h2>
+      <Totals totals={totals} prevTotalsRef={prevTotalsRef} labels={t} />
 
       <section className="note" aria-live="polite">
         <p key={noteIndex} className={`note-text ${notePhase}`}>
@@ -482,10 +645,10 @@ export default function App() {
       </section>
 
       <section className="timeline" aria-label="Our storyline">
-        <h2>Our storyline</h2>
-        {eventsError ? <p className="timeline-note">{eventsError}</p> : null}
+        <h2>{t.timelineHeading}</h2>
+        {eventsError ? <p className="timeline-note">{t.errorEvents}</p> : null}
         {loadingEvents ? (
-          <p className="timeline-note">Loading events...</p>
+          <p className="timeline-note">{t.loadingEvents}</p>
         ) : null}
         <div className="timeline-list">
           {timelineItems.map((item) => {
@@ -502,6 +665,10 @@ export default function App() {
                 event={item.data}
                 idx={item.idx}
                 variants={cardVariants}
+                reduceMotion={reduceMotion}
+                locale={locale}
+                copy={t}
+                mobileLightMotion={mobileLightMotion}
               />
             );
           })}
@@ -521,12 +688,12 @@ export default function App() {
               className="event-detail-close"
               type="button"
               onClick={() => setActiveEvent(null)}
-              aria-label="Close details"
+              aria-label={t.closeDetails}
             >
               ×
             </button>
             <p className="event-detail-date">
-              {new Date(activeEvent.time).toLocaleString(undefined, {
+              {new Date(activeEvent.time).toLocaleString(locale, {
                 year: "numeric",
                 month: "long",
                 day: "numeric",
