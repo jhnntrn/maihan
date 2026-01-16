@@ -99,6 +99,14 @@ export default function Event({
     setGlideDuration(duration);
   }, [loopDistance]);
 
+  // Ensure initial position sits at the seam so the first frame has no leading gap
+  useEffect(() => {
+    if (!basePhotos.length || loopDistance <= 0) return;
+    const startX = direction === 1 ? -loopDistance : loopDistance;
+    glideControls.set({ x: startX });
+    x.set(startX);
+  }, [basePhotos.length, loopDistance, direction, glideControls, x]);
+
   useEffect(() => {
     if (reduceMotion) return;
     if (!basePhotos.length || loopDistance <= 0) return;
@@ -107,20 +115,32 @@ export default function Event({
 
     if (inView && !isPaused) {
       const current = x.get();
-      const bounded = Math.max(-loopDistance, Math.min(0, current));
+      const minX = Math.min(startX, endX);
+      const maxX = Math.max(startX, endX);
+      let bounded = Math.max(minX, Math.min(maxX, current));
+
+      // On first run (fresh mount), start at the seam for a seamless loop
+      if (Math.abs(bounded) < 1e-3) {
+        bounded = startX;
+      }
+
       const totalDist = Math.abs(endX - startX) || 1;
       const remainingDist = Math.abs(endX - bounded);
-      const frac = Math.max(0.01, Math.min(1, remainingDist / totalDist));
+      const remainingFrac = Math.max(
+        0.01,
+        Math.min(1, remainingDist / totalDist)
+      );
+      const remainingDuration = glideDuration * remainingFrac;
+
       glideControls.set({ x: bounded });
       x.set(bounded);
       glideControls.start({
-        x: [bounded, endX, startX],
+        x: [bounded, endX],
         transition: {
           repeat: Infinity,
           repeatType: "loop",
           ease: "linear",
-          duration: glideDuration,
-          times: [0, frac, 1],
+          duration: remainingDuration,
         },
       });
     } else {
@@ -240,7 +260,9 @@ export default function Event({
           mobileLightMotion
             ? {
                 opacity: hasEntered ? 1 : 0,
-                transform: hasEntered ? "translateY(0px)" : "translateY(20px)",
+                transform: hasEntered
+                  ? "translate3d(0, 0, 0)"
+                  : `translate3d(${event.side === "left" ? -18 : 18}px, 0, 0)`,
                 transition: "opacity 240ms ease, transform 240ms ease",
               }
             : undefined
