@@ -37,6 +37,7 @@ export default function Event({
       ? window.matchMedia("(pointer: coarse)").matches
       : false
   );
+  const hasLoopStarted = useRef(false);
 
   const photos = event.pictures ?? [];
   const basePhotos = useMemo(() => {
@@ -105,6 +106,7 @@ export default function Event({
     const startX = direction === 1 ? -loopDistance : loopDistance;
     glideControls.set({ x: startX });
     x.set(startX);
+    hasLoopStarted.current = false;
   }, [basePhotos.length, loopDistance, direction, glideControls, x]);
 
   useEffect(() => {
@@ -120,9 +122,10 @@ export default function Event({
       let bounded = Math.max(minX, Math.min(maxX, current));
 
       // On first run (fresh mount), start at the seam for a seamless loop
-      if (Math.abs(bounded) < 1e-3) {
+      if (!hasLoopStarted.current && Math.abs(bounded) < 1e-3) {
         bounded = startX;
       }
+      hasLoopStarted.current = true;
 
       const totalDist = Math.abs(endX - startX) || 1;
       const remainingDist = Math.abs(endX - bounded);
@@ -315,6 +318,7 @@ export default function Event({
                       glideControls.stop();
                       glideControls.set({ x: normalized });
                       x.set(normalized);
+                      hasLoopStarted.current = true;
                       resumeGlide(0);
                     }
                   : undefined
