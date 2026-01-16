@@ -292,17 +292,33 @@ export default function Event({
               onFocus={pauseGlide}
               onBlur={() => resumeGlide(0)}
               drag={isCoarsePointer ? "x" : false}
-              dragConstraints={
+              dragElastic={isCoarsePointer ? 0.08 : undefined}
+              onDragStart={isCoarsePointer ? () => pauseGlide() : undefined}
+              onDragEnd={
                 isCoarsePointer
-                  ? {
-                      left: -Math.max(loopDistance, 0),
-                      right: 0,
+                  ? (_, info) => {
+                      if (!loopDistance) {
+                        resumeGlide(0);
+                        return;
+                      }
+                      const dist = loopDistance;
+                      const wrap = (val) => {
+                        const raw = ((val % dist) + dist) % dist;
+                        if (direction === 1) {
+                          return raw === 0 ? 0 : raw - dist; // range [-dist, 0)
+                        }
+                        return raw === 0 ? 0 : raw; // range [0, dist)
+                      };
+                      const deltaX = info?.delta?.x ?? 0;
+                      const current = x.get() + deltaX;
+                      const normalized = wrap(current);
+                      glideControls.stop();
+                      glideControls.set({ x: normalized });
+                      x.set(normalized);
+                      resumeGlide(0);
                     }
                   : undefined
               }
-              dragElastic={isCoarsePointer ? 0.08 : undefined}
-              onDragStart={isCoarsePointer ? () => pauseGlide() : undefined}
-              onDragEnd={isCoarsePointer ? () => resumeGlide(0) : undefined}
               style={{ touchAction: "pan-y", x }}
             >
               {loopedPhotos.map((src, i) => (
