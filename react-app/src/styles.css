@@ -440,10 +440,6 @@ h2 {
   text-align: right;
 }
 
-.timeline-card.side-right .event-photos {
-  justify-content: flex-end;
-}
-
 .timeline-card.side-left .timeline-dot {
   left: clamp(14px, 7vw, 22px);
 }
@@ -517,7 +513,8 @@ h2 {
   padding-bottom: 6px;
   scroll-snap-type: x mandatory;
   scrollbar-width: thin;
-  width: 100%;
+  width: max-content;
+  min-width: 100%;
 }
 
 .event-photos img {

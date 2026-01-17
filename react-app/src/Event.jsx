@@ -31,12 +31,8 @@ export default function Event({
   const [isPaused, setIsPaused] = useState(false);
   const resumeTimeout = useRef(null);
   const x = useMotionValue(0);
+  const [firstImageWidth, setFirstImageWidth] = useState(0);
   const [activePhoto, setActivePhoto] = useState(null);
-  const [isCoarsePointer, setIsCoarsePointer] = useState(() =>
-    typeof window !== "undefined"
-      ? window.matchMedia("(pointer: coarse)").matches
-      : false
-  );
   const hasLoopStarted = useRef(false);
 
   const photos = event.pictures ?? [];
@@ -49,49 +45,52 @@ export default function Event({
       .slice(0, 4);
   }, [photos]);
 
-  const loopedPhotos = useMemo(
-    () => (basePhotos.length ? [...basePhotos, ...basePhotos] : []),
-    [basePhotos]
-  );
   const direction = event.side === "left" ? 1 : -1;
 
-  useEffect(() => {
-    if (reduceMotion) {
-      // Keep strip static when reduced motion is requested (mobile/OS pref)
-      glideControls.stop();
-      x.set(0);
-    }
-  }, [reduceMotion, glideControls, x]);
+  const stripCopies = 3;
+  const loopedPhotos = useMemo(() => {
+    if (!basePhotos.length) return [];
+    return Array.from({ length: stripCopies }, () => basePhotos).flat();
+  }, [basePhotos]);
 
   useEffect(() => {
-    if (mobileLightMotion) {
-      setHasEntered(inView);
-    }
-  }, [mobileLightMotion, inView]);
-
-  useEffect(() => {
-    if (!photosStripRef.current) return undefined;
-
+    if (!basePhotos.length) return undefined;
     const measure = () => {
-      const el = photosStripRef.current;
-      if (!el) return;
-      const width = el.scrollWidth / 2; // half because we duplicate
-      if (width > 0) setLoopDistance(width);
+      const strip = photosStripRef.current;
+      if (!strip) return;
+      const distance = (strip.scrollWidth || 0) / stripCopies;
+      const firstImg = strip.querySelector("img");
+      const imgWidth = firstImg?.getBoundingClientRect().width || 0;
+      setLoopDistance(distance || 0);
+      setFirstImageWidth(imgWidth);
     };
 
     measure();
+
+    const ro = new ResizeObserver(() => measure());
+    if (photosStripRef.current) {
+      ro.observe(photosStripRef.current);
+    }
     window.addEventListener("resize", measure);
-    const mq = window.matchMedia("(pointer: coarse)");
-    const onPointerChange = () => setIsCoarsePointer(mq.matches);
-    mq.addEventListener("change", onPointerChange);
+
     return () => {
+      ro.disconnect();
       window.removeEventListener("resize", measure);
-      mq.removeEventListener("change", onPointerChange);
+    };
+  }, [basePhotos.length]);
+
+  useEffect(() => {
+    if (inView) setHasEntered(true);
+  }, [inView]);
+
+  useEffect(
+    () => () => {
       if (resumeTimeout.current) {
         clearTimeout(resumeTimeout.current);
       }
-    };
-  }, [basePhotos.length]);
+    },
+    []
+  );
 
   useEffect(() => {
     if (loopDistance <= 0) return;
@@ -103,37 +102,38 @@ export default function Event({
   // Ensure initial position sits at the seam so the first frame has no leading gap
   useEffect(() => {
     if (!basePhotos.length || loopDistance <= 0) return;
-    const startX = direction === 1 ? -loopDistance : loopDistance;
+    const startX = direction === 1 ? -loopDistance : 0;
     glideControls.set({ x: startX });
     x.set(startX);
     hasLoopStarted.current = false;
-  }, [basePhotos.length, loopDistance, direction, glideControls, x]);
+  }, [
+    basePhotos.length,
+    loopDistance,
+    firstImageWidth,
+    direction,
+    glideControls,
+    x,
+  ]);
 
   useEffect(() => {
     if (reduceMotion) return;
     if (!basePhotos.length || loopDistance <= 0) return;
-    const startX = direction === 1 ? -loopDistance : loopDistance;
-    const endX = 0;
+    const startX = direction === 1 ? -loopDistance : 0;
+    const endX = direction === 1 ? 0 : -loopDistance;
+    const minX = Math.min(startX, endX);
+    const maxX = Math.max(startX, endX);
 
     if (inView && !isPaused) {
       const current = x.get();
-      const minX = Math.min(startX, endX);
-      const maxX = Math.max(startX, endX);
-      let bounded = Math.max(minX, Math.min(maxX, current));
-
-      // On first run (fresh mount), start at the seam for a seamless loop
-      if (!hasLoopStarted.current && Math.abs(bounded) < 1e-3) {
-        bounded = startX;
-      }
+      // Force the first run to start at the seam, otherwise a stale 0 would shorten the duration.
+      let bounded = hasLoopStarted.current
+        ? Math.max(minX, Math.min(maxX, current))
+        : startX;
       hasLoopStarted.current = true;
 
       const totalDist = Math.abs(endX - startX) || 1;
       const remainingDist = Math.abs(endX - bounded);
-      const remainingFrac = Math.max(
-        0.01,
-        Math.min(1, remainingDist / totalDist)
-      );
-      const remainingDuration = glideDuration * remainingFrac;
+      const frac = Math.max(0.01, Math.min(1, remainingDist / totalDist));
 
       glideControls.set({ x: bounded });
       x.set(bounded);
@@ -143,7 +143,8 @@ export default function Event({
           repeat: Infinity,
           repeatType: "loop",
           ease: "linear",
-          duration: remainingDuration,
+          duration: glideDuration * frac,
+          times: [0, 1],
         },
       });
     } else {
@@ -159,6 +160,7 @@ export default function Event({
     glideDuration,
     inView,
     loopDistance,
+    firstImageWidth,
     isPaused,
     x,
     reduceMotion,
@@ -294,35 +296,31 @@ export default function Event({
               onMouseLeave={() => resumeGlide(0)}
               onFocus={pauseGlide}
               onBlur={() => resumeGlide(0)}
-              drag={isCoarsePointer ? "x" : false}
-              dragElastic={isCoarsePointer ? 0.08 : undefined}
-              onDragStart={isCoarsePointer ? () => pauseGlide() : undefined}
-              onDragEnd={
-                isCoarsePointer
-                  ? (_, info) => {
-                      if (!loopDistance) {
-                        resumeGlide(0);
-                        return;
-                      }
-                      const dist = loopDistance;
-                      const wrap = (val) => {
-                        const raw = ((val % dist) + dist) % dist;
-                        if (direction === 1) {
-                          return raw === 0 ? 0 : raw - dist; // range [-dist, 0)
-                        }
-                        return raw === 0 ? 0 : raw; // range [0, dist)
-                      };
-                      const deltaX = info?.delta?.x ?? 0;
-                      const current = x.get() + deltaX;
-                      const normalized = wrap(current);
-                      glideControls.stop();
-                      glideControls.set({ x: normalized });
-                      x.set(normalized);
-                      hasLoopStarted.current = true;
-                      resumeGlide(0);
-                    }
-                  : undefined
-              }
+              drag="x"
+              dragElastic={0.08}
+              onDragStart={() => pauseGlide()}
+              onDragEnd={(_, info) => {
+                if (!loopDistance) {
+                  resumeGlide(0);
+                  return;
+                }
+                const dist = loopDistance;
+                const rangeStart = direction === 1 ? -dist : -dist;
+                const rangeEnd = direction === 1 ? 0 : 0;
+                const span = Math.abs(rangeEnd - rangeStart) || 1;
+                const wrap = (val) => {
+                  const raw = (((val - rangeStart) % span) + span) % span;
+                  return rangeStart + raw;
+                };
+                const delta = info?.delta?.x ?? 0;
+                const current = x.get() + delta;
+                const normalized = wrap(current);
+                glideControls.stop();
+                glideControls.set({ x: normalized });
+                x.set(normalized);
+                hasLoopStarted.current = true;
+                resumeGlide(0);
+              }}
               style={{ touchAction: "pan-y", x }}
             >
               {loopedPhotos.map((src, i) => (
