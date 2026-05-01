@@ -6,7 +6,10 @@ import {
   useAnimation,
   useInView,
   useMotionValue,
-} from "framer-motion";
+} from "motion/react";
+
+const STRIP_COPIES = 3;
+const PHOTO_SPEED_PX_PER_SECOND = 20;
 
 export default function Event({
   event,
@@ -26,31 +29,28 @@ export default function Event({
 
   const photosStripRef = useRef(null);
   const [loopDistance, setLoopDistance] = useState(400);
-  const [glideDuration, setGlideDuration] = useState(12);
   const glideControls = useAnimation();
   const [isPaused, setIsPaused] = useState(false);
   const resumeTimeout = useRef(null);
   const x = useMotionValue(0);
-  const [firstImageWidth, setFirstImageWidth] = useState(0);
   const [activePhoto, setActivePhoto] = useState(null);
   const hasLoopStarted = useRef(false);
 
-  const photos = event.pictures ?? [];
   const basePhotos = useMemo(() => {
+    const photos = Array.isArray(event.pictures) ? event.pictures : [];
     if (!photos.length) return [];
     if (photos.length >= 4) return photos;
     const repeats = Math.ceil(4 / photos.length);
     return Array.from({ length: repeats }, () => photos)
       .flat()
       .slice(0, 4);
-  }, [photos]);
+  }, [event.pictures]);
 
   const direction = event.side === "left" ? 1 : -1;
 
-  const stripCopies = 3;
   const loopedPhotos = useMemo(() => {
     if (!basePhotos.length) return [];
-    return Array.from({ length: stripCopies }, () => basePhotos).flat();
+    return Array.from({ length: STRIP_COPIES }, () => basePhotos).flat();
   }, [basePhotos]);
 
   useEffect(() => {
@@ -58,19 +58,19 @@ export default function Event({
     const measure = () => {
       const strip = photosStripRef.current;
       if (!strip) return;
-      const distance = (strip.scrollWidth || 0) / stripCopies;
-      const firstImg = strip.querySelector("img");
-      const imgWidth = firstImg?.getBoundingClientRect().width || 0;
-      setLoopDistance(distance || 0);
-      setFirstImageWidth(imgWidth);
+      const distance = (strip.scrollWidth || 0) / STRIP_COPIES;
+      setLoopDistance(distance);
     };
 
     measure();
 
-    const ro = new ResizeObserver(() => measure());
-    if (photosStripRef.current) {
-      ro.observe(photosStripRef.current);
+    if (typeof ResizeObserver === "undefined") {
+      window.addEventListener("resize", measure);
+      return () => window.removeEventListener("resize", measure);
     }
+
+    const ro = new ResizeObserver(() => measure());
+    ro.observe(photosStripRef.current);
     window.addEventListener("resize", measure);
 
     return () => {
@@ -92,12 +92,9 @@ export default function Event({
     []
   );
 
-  useEffect(() => {
-    if (loopDistance <= 0) return;
-    const pxPerSecond = 20; // target constant speed
-    const duration = loopDistance / pxPerSecond;
-    setGlideDuration(duration);
-  }, [loopDistance]);
+  const glideDuration =
+    loopDistance > 0 ? loopDistance / PHOTO_SPEED_PX_PER_SECOND : 12;
+
 
   // Ensure initial position sits at the seam so the first frame has no leading gap
   useEffect(() => {
@@ -108,10 +105,9 @@ export default function Event({
     hasLoopStarted.current = false;
   }, [
     basePhotos.length,
-    loopDistance,
-    firstImageWidth,
     direction,
     glideControls,
+    loopDistance,
     x,
   ]);
 
@@ -159,11 +155,10 @@ export default function Event({
     glideControls,
     glideDuration,
     inView,
-    loopDistance,
-    firstImageWidth,
     isPaused,
-    x,
+    loopDistance,
     reduceMotion,
+    x,
   ]);
 
   const pauseGlide = () => {
@@ -304,9 +299,8 @@ export default function Event({
                   resumeGlide(0);
                   return;
                 }
-                const dist = loopDistance;
-                const rangeStart = direction === 1 ? -dist : -dist;
-                const rangeEnd = direction === 1 ? 0 : 0;
+                const rangeStart = -loopDistance;
+                const rangeEnd = 0;
                 const span = Math.abs(rangeEnd - rangeStart) || 1;
                 const wrap = (val) => {
                   const raw = (((val - rangeStart) % span) + span) % span;
@@ -324,13 +318,15 @@ export default function Event({
               style={{ touchAction: "pan-y", x }}
             >
               {loopedPhotos.map((src, i) => (
-                <img
+                <button
                   key={`${event.time}-${i}`}
-                  src={src}
-                  alt={event.name}
-                  loading="lazy"
+                  type="button"
+                  className="event-photo-button"
                   onClick={() => openPhoto(src)}
-                />
+                  aria-label={`${event.name} photo ${i + 1}`}
+                >
+                  <img src={src} alt="" loading="lazy" draggable="false" />
+                </button>
               ))}
             </motion.div>
           </div>

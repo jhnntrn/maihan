@@ -1,14 +1,132 @@
 import { memo, useEffect, useMemo, useRef, useState } from "react";
-import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { BASE_DATE, diffParts } from "../../shared/dateDiff";
 import eventsUrl from "../../shared/events.json?url";
 import EventAdmin from "./EventAdmin";
 import loveNotes from "../../shared/loveNotes.json";
 import Event from "./Event";
 
+const MOBILE_QUERY = "(max-width: 768px)";
+const EVENTS_API_URL = "/api/events";
+
+const COPY = {
+  en: {
+    sentenceIntro: "We have been together for ",
+    conjunction: " and ",
+    totalsHeading: "Which means",
+    unitLabels: {
+      years: ["year", "years"],
+      months: ["month", "months"],
+      days: ["day", "days"],
+      hours: ["hour", "hours"],
+      minutes: ["minute", "minutes"],
+      seconds: ["second", "seconds"],
+    },
+    totalDays: "days",
+    totalHours: "hours",
+    totalMinutes: "minutes",
+    totalSeconds: "seconds",
+    timelineHeading: "story",
+    loadingEvents: "Loading events...",
+    errorEvents: "Could not load events.",
+    closePhoto: "Close photo",
+  },
+  vi: {
+    sentenceIntro: "Bọn mình đã bên nhau được",
+    conjunction: " và ",
+    totalsHeading: "là khoảng",
+    unitLabels: {
+      years: ["năm", "năm"],
+      months: ["tháng", "tháng"],
+      days: ["ngày", "ngày"],
+      hours: ["giờ", "giờ"],
+      minutes: ["phút", "phút"],
+      seconds: ["giây", "giây"],
+    },
+    totalDays: "ngày",
+    totalHours: "giờ",
+    totalMinutes: "phút",
+    totalSeconds: "giây",
+    timelineHeading: "Câu chuyện của tụi mình <3",
+    loadingEvents: "Đang tải sự kiện...",
+    errorEvents: "Không thể tải sự kiện.",
+    closePhoto: "Đóng ảnh",
+  },
+};
+
+const CARD_VARIANTS = {
+  hidden: (side) => ({
+    opacity: 0,
+    y: 24,
+    x: side === "left" ? -30 : 30,
+    rotate: side === "left" ? -2 : 2,
+    scale: 0.98,
+  }),
+  visible: {
+    opacity: 1,
+    y: 0,
+    x: 0,
+    rotate: 0,
+    scale: 1,
+    transition: { type: "spring", damping: 18, stiffness: 200 },
+  },
+};
+
+async function fetchJson(url) {
+  const response = await fetch(url, { cache: "no-store" });
+  if (!response.ok) {
+    throw new Error(`Request failed with ${response.status}`);
+  }
+  return response.json();
+}
+
+async function fetchEvents() {
+  try {
+    const data = await fetchJson(EVENTS_API_URL);
+    return Array.isArray(data) ? data : [];
+  } catch {
+    const data = await fetchJson(eventsUrl);
+    return Array.isArray(data) ? data : [];
+  }
+}
+
+async function saveEvents(events, adminSecret) {
+  const response = await fetch(EVENTS_API_URL, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      "x-admin-secret": adminSecret,
+    },
+    body: JSON.stringify(events),
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => null);
+    throw new Error(error?.error || `Save failed with ${response.status}`);
+  }
+
+  return response.json();
+}
+
+function compareEventsByTime(a, b) {
+  return Date.parse(a.time) - Date.parse(b.time);
+}
+
+function createRandomSeed() {
+  if (typeof crypto !== "undefined" && crypto.getRandomValues) {
+    const values = new Uint32Array(1);
+    crypto.getRandomValues(values);
+    return values[0] || Date.now();
+  }
+  return Math.floor(Math.random() * 2147483647) || Date.now();
+}
+
 function AdminPage() {
   const [authed, setAuthed] = useState(
     () => localStorage.getItem("adminAuthed") === "true"
+  );
+  const [adminSecret, setAdminSecret] = useState(
+    () => sessionStorage.getItem("adminSecret") || ""
   );
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -26,22 +144,42 @@ function AdminPage() {
     const a = document.createElement("a");
     a.href = url;
     a.download = "events.json";
+    document.body.append(a);
     a.click();
-    URL.revokeObjectURL(url);
+    a.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 0);
   };
 
   useEffect(() => {
     if (!authed) return;
+    let cancelled = false;
+
     setLoading(true);
     setFetchError("");
-    fetch(eventsUrl, { cache: "no-store" })
-      .then((res) => res.json())
-      .then((data) => setEvents(Array.isArray(data) ? data : []))
-      .catch(() => {
-        setFetchError("Could not load events.json");
-        setEvents([]);
-      })
-      .finally(() => setLoading(false));
+
+    async function loadEvents() {
+      try {
+        const data = await fetchEvents();
+        if (!cancelled) {
+          setEvents(data);
+        }
+      } catch {
+        if (!cancelled) {
+          setFetchError("Could not load events.");
+          setEvents([]);
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    }
+
+    loadEvents();
+
+    return () => {
+      cancelled = true;
+    };
   }, [authed]);
 
   // Auto-export disabled: manual download/import only
@@ -67,11 +205,18 @@ function AdminPage() {
     }
   };
 
+  const handleSaveEvents = async (nextEvents) => {
+    await saveEvents(nextEvents, adminSecret);
+    setEvents(nextEvents);
+  };
+
   const handleLogin = (e) => {
     e.preventDefault();
     const secret = import.meta.env.VITE_ADMIN_PASSWORD || "mtriyeumaihan";
     if (password === secret) {
       localStorage.setItem("adminAuthed", "true");
+      sessionStorage.setItem("adminSecret", password);
+      setAdminSecret(password);
       setAuthed(true);
       setError("");
     } else {
@@ -133,8 +278,14 @@ function AdminPage() {
         />
       </header>
       {importStatus ? <p className="timeline-note">{importStatus}</p> : null}
+      {fetchError ? <p className="timeline-note">{fetchError}</p> : null}
       {loading ? <p className="timeline-note">Loading events...</p> : null}
-      <EventAdmin events={events} setEvents={setEvents} />
+      <EventAdmin
+        adminSecret={adminSecret}
+        events={events}
+        onSaveEvents={handleSaveEvents}
+        setEvents={setEvents}
+      />
     </main>
   );
 }
@@ -259,72 +410,16 @@ const Totals = memo(function Totals({ totals, prevTotalsRef, labels }) {
   );
 });
 
-export default function App() {
+function TimelinePage() {
   const prefersReducedMotion = useReducedMotion();
   const [isMobile, setIsMobile] = useState(() =>
-    typeof window !== "undefined" ? window.innerWidth <= 768 : false
+    typeof window !== "undefined" ? window.matchMedia(MOBILE_QUERY).matches : false
   );
   const [language, setLanguage] = useState(() => {
     if (typeof window === "undefined") return "en";
     return localStorage.getItem("lang") || "vi";
   });
-  const copy = useMemo(
-    () => ({
-      en: {
-        sentenceIntro: "We have been together for ",
-        conjunction: " and ",
-        totalsHeading: "Which means",
-        unitLabels: {
-          years: ["year", "years"],
-          months: ["month", "months"],
-          days: ["day", "days"],
-          hours: ["hour", "hours"],
-          minutes: ["minute", "minutes"],
-          seconds: ["second", "seconds"],
-        },
-        totalDays: "days",
-        totalHours: "hours",
-        totalMinutes: "minutes",
-        totalSeconds: "seconds",
-        timelineHeading: "story",
-        loadingEvents: "Loading events...",
-        errorEvents: "Could not load events.",
-        closeDetails: "Close details",
-        closePhoto: "Close photo",
-      },
-      vi: {
-        sentenceIntro: "Bọn mình đã bên nhau được",
-        conjunction: " và ",
-        totalsHeading: "là khoảng",
-        unitLabels: {
-          years: ["năm", "năm"],
-          months: ["tháng", "tháng"],
-          days: ["ngày", "ngày"],
-          hours: ["giờ", "giờ"],
-          minutes: ["phút", "phút"],
-          seconds: ["giây", "giây"],
-        },
-        totalDays: "ngày",
-        totalHours: "giờ",
-        totalMinutes: "phút",
-        totalSeconds: "giây",
-        timelineHeading: "Câu chuyện của tụi mình <3",
-        loadingEvents: "Đang tải sự kiện...",
-        errorEvents: "Không thể tải sự kiện.",
-        closeDetails: "Đóng chi tiết",
-        closePhoto: "Đóng ảnh",
-      },
-    }),
-    []
-  );
-  const randomSeed = useMemo(() => {
-    if (typeof crypto !== "undefined" && crypto.getRandomValues) {
-      const arr = new Uint32Array(1);
-      crypto.getRandomValues(arr);
-      return arr[0] || Date.now();
-    }
-    return Math.floor(Math.random() * 2147483647) || Date.now();
-  }, []);
+  const randomSeed = useMemo(() => createRandomSeed(), []);
   const [now, setNow] = useState(() => new Date());
   const [noteIndex, setNoteIndex] = useState(0);
   const [events, setEvents] = useState([]);
@@ -332,9 +427,6 @@ export default function App() {
   const [eventsError, setEventsError] = useState("");
   const [typedNote, setTypedNote] = useState("");
   const [notePhase, setNotePhase] = useState("typing");
-  const [activeEvent, setActiveEvent] = useState(null);
-  const toggleRef = useRef(null);
-  const [path, setPath] = useState(() => window.location.pathname);
 
   const prevDiffRef = useRef(null);
   const prevTotalsRef = useRef({
@@ -345,17 +437,12 @@ export default function App() {
   });
 
   useEffect(() => {
-    const handlePop = () => setPath(window.location.pathname);
-    window.addEventListener("popstate", handlePop);
-    return () => window.removeEventListener("popstate", handlePop);
-  }, []);
+    const mediaQuery = window.matchMedia(MOBILE_QUERY);
+    const updateIsMobile = () => setIsMobile(mediaQuery.matches);
+    updateIsMobile();
 
-  useEffect(() => {
-    const onResize = () => {
-      setIsMobile(window.innerWidth <= 768);
-    };
-    window.addEventListener("resize", onResize);
-    return () => window.removeEventListener("resize", onResize);
+    mediaQuery.addEventListener("change", updateIsMobile);
+    return () => mediaQuery.removeEventListener("change", updateIsMobile);
   }, []);
 
   useEffect(() => {
@@ -373,40 +460,52 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
+
     setEventsError("");
     setLoadingEvents(true);
-    fetch(eventsUrl, { cache: "no-store" })
-      .then((res) => res.json())
-      .then((data) => setEvents(Array.isArray(data) ? data : []))
-      .catch(() => {
-        setEventsError("Could not load events.json");
-        setEvents([]);
-      })
-      .finally(() => setLoadingEvents(false));
+
+    async function loadEvents() {
+      try {
+        const data = await fetchEvents();
+        if (!cancelled) {
+          setEvents(data);
+        }
+      } catch {
+        if (!cancelled) {
+          setEventsError("Could not load events.");
+          setEvents([]);
+        }
+      } finally {
+        if (!cancelled) {
+          setLoadingEvents(false);
+        }
+      }
+    }
+
+    loadEvents();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  // Theme toggle removed to keep background static
-
-  if (path.startsWith("/admin")) {
-    return <AdminPage />;
-  }
-
   const locale = language === "vi" ? "vi-VN" : undefined;
-  const t = copy[language] || copy.en;
+  const t = COPY[language] || COPY.en;
   const mobileLightMotion = isMobile && !prefersReducedMotion;
 
   const diff = useMemo(() => diffParts(BASE_DATE, now), [now]);
 
-  const labelFor = (key, value) => {
-    const labels = t.unitLabels?.[key];
-    if (!labels) return value === 1 ? key : `${key}s`;
-    if (Array.isArray(labels)) {
-      return value === 1 ? labels[0] : labels[1];
-    }
-    return labels;
-  };
-
   const visibleUnits = useMemo(() => {
+    const labelFor = (key, value) => {
+      const labels = t.unitLabels?.[key];
+      if (!labels) return value === 1 ? key : `${key}s`;
+      if (Array.isArray(labels)) {
+        return value === 1 ? labels[0] : labels[1];
+      }
+      return labels;
+    };
+
     const units = [
       {
         key: "years",
@@ -512,9 +611,7 @@ export default function App() {
   }, [noteIndex]);
 
   const enrichedEvents = useMemo(() => {
-    const sorted = [...events].sort(
-      (a, b) => new Date(a.time) - new Date(b.time)
-    );
+    const sorted = [...events].sort(compareEventsByTime);
 
     const assignSides = (list) => {
       // Pseudo-random per page load; still deterministic during a session
@@ -579,24 +676,6 @@ export default function App() {
     });
     return items;
   }, [enrichedEvents]);
-
-  const cardVariants = {
-    hidden: (side) => ({
-      opacity: 0,
-      y: 24,
-      x: side === "left" ? -30 : 30,
-      rotate: side === "left" ? -2 : 2,
-      scale: 0.98,
-    }),
-    visible: {
-      opacity: 1,
-      y: 0,
-      x: 0,
-      rotate: 0,
-      scale: 1,
-      transition: { type: "spring", damping: 18, stiffness: 200 },
-    },
-  };
 
   const reduceMotion = prefersReducedMotion;
 
@@ -664,7 +743,7 @@ export default function App() {
                 key={`${item.data.time}-${item.idx}`}
                 event={item.data}
                 idx={item.idx}
-                variants={cardVariants}
+                variants={CARD_VARIANTS}
                 reduceMotion={reduceMotion}
                 locale={locale}
                 copy={t}
@@ -674,50 +753,20 @@ export default function App() {
           })}
         </div>
       </section>
-
-      {activeEvent ? (
-        <div
-          className="event-detail-backdrop"
-          role="dialog"
-          aria-modal="true"
-          aria-label={`${activeEvent.name} details`}
-          onClick={() => setActiveEvent(null)}
-        >
-          <div className="event-detail" onClick={(e) => e.stopPropagation()}>
-            <button
-              className="event-detail-close"
-              type="button"
-              onClick={() => setActiveEvent(null)}
-              aria-label={t.closeDetails}
-            >
-              ×
-            </button>
-            <p className="event-detail-date">
-              {new Date(activeEvent.time).toLocaleString(locale, {
-                year: "numeric",
-                month: "long",
-                day: "numeric",
-              })}
-            </p>
-            <h3 className="event-detail-name">{activeEvent.name}</h3>
-            <p className="event-detail-desc">{activeEvent.description}</p>
-            {activeEvent.pictures?.length ? (
-              <div className="event-detail-photos">
-                {activeEvent.pictures.map((src, idx) => (
-                  <img
-                    key={`${activeEvent.time}-${idx}`}
-                    src={src}
-                    alt={activeEvent.name}
-                    loading="lazy"
-                  />
-                ))}
-              </div>
-            ) : null}
-          </div>
-        </div>
-      ) : null}
-
-      <footer></footer>
     </main>
   );
+}
+
+export default function App() {
+  const [path, setPath] = useState(() =>
+    typeof window !== "undefined" ? window.location.pathname : "/"
+  );
+
+  useEffect(() => {
+    const handlePop = () => setPath(window.location.pathname);
+    window.addEventListener("popstate", handlePop);
+    return () => window.removeEventListener("popstate", handlePop);
+  }, []);
+
+  return path.startsWith("/admin") ? <AdminPage /> : <TimelinePage />;
 }
