@@ -27,6 +27,11 @@ const COPY = {
     totalMinutes: "minutes",
     totalSeconds: "seconds",
     timelineHeading: "Our story <3",
+    onThisDayHeading: "On this day",
+    thisMonthHeading: "This month in our memories",
+    storyProgress: "Story progress",
+    memoryMode: "Memory mode",
+    closeMemoryMode: "Close memory mode",
     loadingEvents: "Loading events...",
     errorEvents: "Could not load events.",
     closePhoto: "Close photo",
@@ -48,6 +53,11 @@ const COPY = {
     totalMinutes: "phút",
     totalSeconds: "giây",
     timelineHeading: "Câu chuyện của tụi mình <3",
+    onThisDayHeading: "Ngày này năm xưa",
+    thisMonthHeading: "Tháng này trong kỷ niệm",
+    storyProgress: "Tiến trình câu chuyện",
+    memoryMode: "Chế độ kỷ niệm",
+    closeMemoryMode: "Đóng chế độ kỷ niệm",
     loadingEvents: "Đang tải sự kiện...",
     errorEvents: "Không thể tải sự kiện.",
     closePhoto: "Đóng ảnh",
@@ -203,6 +213,34 @@ function createRandomSeed() {
     return values[0] || Date.now();
   }
   return Math.floor(Math.random() * 2147483647) || Date.now();
+}
+
+function cssEscape(value) {
+  const stringValue = String(value);
+  if (typeof CSS !== "undefined" && CSS.escape) {
+    return CSS.escape(stringValue);
+  }
+  return stringValue.replace(/"/g, '\\"');
+}
+
+function scrollToEventTime(time) {
+  const target = document.querySelector(`[data-event-id="${cssEscape(time)}"]`);
+  target?.scrollIntoView({ behavior: "smooth", block: "center" });
+}
+
+function monthCardType(date) {
+  return `month-${date.getMonth() + 1}`;
+}
+
+function progressEventKey(event) {
+  return `event-${event.id || event.time}`;
+}
+
+function scrollToProgressKey(key) {
+  const target = document.querySelector(
+    `[data-progress-key="${cssEscape(key)}"]`,
+  );
+  target?.scrollIntoView({ behavior: "smooth", block: "center" });
 }
 
 function AdminPage() {
@@ -584,6 +622,105 @@ const Totals = memo(function Totals({ totals, prevTotalsRef, labels }) {
   );
 });
 
+function VisualBackdrop() {
+  return (
+    <div className="parallax-memory-bg" aria-hidden="true">
+      {Array.from({ length: 7 }, (_, index) => (
+        <span key={index} className={`parallax-frame frame-${index + 1}`} />
+      ))}
+    </div>
+  );
+}
+
+function StoryProgressRail({ items, activeKey, visible, label, onSelect }) {
+  if (!items.length) return null;
+  const activeIndex = Math.max(
+    0,
+    items.findIndex((item) => item.key === activeKey),
+  );
+
+  return (
+    <nav
+      className={`story-progress ${visible ? "story-progress-visible" : ""}`}
+      aria-label={label}
+    >
+      <div className="story-progress-line" aria-hidden="true" />
+      {items.map((item, index) => {
+        const distance = index - activeIndex;
+        const distanceClass =
+          Math.abs(distance) > 14
+            ? "is-distant"
+            : Math.abs(distance) > 7
+              ? "is-far"
+              : "";
+        const directionClass =
+          distance < -2 ? "is-past" : distance > 2 ? "is-future" : "";
+
+        return (
+          <button
+            key={item.key}
+            type="button"
+            className={`story-progress-step step-${item.type} ${directionClass} ${distanceClass} ${
+              activeKey === item.key ? "active" : ""
+            }`}
+            onClick={() => onSelect(item)}
+            title={item.title || item.label}
+            aria-label={item.title || item.label}
+          >
+            <span aria-hidden="true">✦</span>
+            <span className="story-progress-label">{item.label}</span>
+          </button>
+        );
+      })}
+    </nav>
+  );
+}
+
+function MemoryModeOverlay({ photos, index, setIndex, labels, onClose }) {
+  if (!photos.length) return null;
+  const current = photos[index % photos.length];
+  const move = (direction) =>
+    setIndex((value) => (value + direction + photos.length) % photos.length);
+
+  return (
+    <motion.div
+      className="memory-mode"
+      role="dialog"
+      aria-modal="true"
+      aria-label={labels.memoryMode}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+    >
+      <button
+        type="button"
+        className="memory-mode-close"
+        onClick={onClose}
+        aria-label={labels.closeMemoryMode}
+      >
+        ×
+      </button>
+      <button type="button" className="memory-mode-nav prev" onClick={() => move(-1)}>
+        ‹
+      </button>
+      <motion.figure
+        key={current.id}
+        className="memory-mode-frame"
+        initial={{ opacity: 0, scale: 0.96, y: 14 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.96, y: -14 }}
+        transition={{ duration: 0.24, ease: "easeOut" }}
+      >
+        <img src={current.src} alt="" />
+        <figcaption>{current.eventName}</figcaption>
+      </motion.figure>
+      <button type="button" className="memory-mode-nav next" onClick={() => move(1)}>
+        ›
+      </button>
+    </motion.div>
+  );
+}
+
 function TimelinePage() {
   const prefersReducedMotion = useReducedMotion();
   const [isMobile, setIsMobile] = useState(() =>
@@ -603,7 +740,14 @@ function TimelinePage() {
   const [eventsError, setEventsError] = useState("");
   const [typedNote, setTypedNote] = useState("");
   const [notePhase, setNotePhase] = useState("typing");
+  const [activeWallPhoto, setActiveWallPhoto] = useState(null);
+  const [memoryOpen, setMemoryOpen] = useState(false);
+  const [memoryModeOpen, setMemoryModeOpen] = useState(false);
+  const [memoryModeIndex, setMemoryModeIndex] = useState(0);
+  const [storyProgressVisible, setStoryProgressVisible] = useState(false);
+  const [activeProgressKey, setActiveProgressKey] = useState("");
 
+  const storyRef = useRef(null);
   const prevDiffRef = useRef(null);
   const prevTotalsRef = useRef({
     days: null,
@@ -832,6 +976,8 @@ function TimelinePage() {
           month: "long",
           year: "numeric",
         }),
+        cardType: monthCardType(d),
+        progressKey: progressEventKey(evt),
       };
     });
   }, [events, locale, randomSeed]);
@@ -841,9 +987,11 @@ function TimelinePage() {
     let lastMonth = null;
     enrichedEvents.forEach((evt, idx) => {
       if (evt.monthKey !== lastMonth) {
+        const monthProgressKey = `month-${evt.monthKey}`;
         items.push({
           type: "month",
-          id: `month-${evt.monthKey}`,
+          id: monthProgressKey,
+          progressKey: monthProgressKey,
           label: evt.monthLabel,
         });
         lastMonth = evt.monthKey;
@@ -853,10 +1001,208 @@ function TimelinePage() {
     return items;
   }, [enrichedEvents]);
 
+  const storyProgressItems = useMemo(() => {
+    const items = [];
+    let lastYear = null;
+    let lastMonth = null;
+
+    enrichedEvents.forEach((event) => {
+      const date = new Date(event.time);
+      const year = date.getFullYear();
+      const monthKey = `${year}-${date.getMonth()}`;
+
+      if (year !== lastYear) {
+        items.push({
+          key: `year-${year}`,
+          targetKey: event.progressKey,
+          type: "year",
+          label: String(year),
+        });
+        lastYear = year;
+      }
+
+      if (monthKey !== lastMonth) {
+        items.push({
+          key: event.progressKey,
+          targetKey: event.progressKey,
+          type: "month",
+          label: date.toLocaleString(locale, { month: "short" }),
+          title: `${date.toLocaleString(locale, {
+            month: "long",
+            year: "numeric",
+          })}: ${event.name}`,
+        });
+        lastMonth = monthKey;
+        return;
+      }
+
+      items.push({
+        key: event.progressKey,
+        targetKey: event.progressKey,
+        type: "event",
+        label: event.name,
+      });
+    });
+
+    return items;
+  }, [enrichedEvents, locale]);
+
+  const photoWallItems = useMemo(
+    () =>
+      enrichedEvents.flatMap((event) =>
+        (event.pictures || []).map((src, photoIndex) => ({
+          id: `${event.id || event.time}-${photoIndex}-${src.slice(0, 24)}`,
+          src,
+          eventName: event.name,
+          eventTime: event.time,
+          photoIndex,
+        })),
+      ),
+    [enrichedEvents],
+  );
+
+  const memoryMatches = useMemo(() => {
+    const month = now.getMonth();
+    const day = now.getDate();
+    const year = now.getFullYear();
+    return enrichedEvents
+      .map((event) => ({ event, date: new Date(event.time) }))
+      .filter(
+        ({ date }) => date.getFullYear() < year && date.getMonth() === month,
+      )
+      .sort((a, b) => {
+        const aExact = a.date.getDate() === day ? 0 : 1;
+        const bExact = b.date.getDate() === day ? 0 : 1;
+        return (
+          aExact - bExact ||
+          Math.abs(a.date.getDate() - day) - Math.abs(b.date.getDate() - day)
+        );
+      })
+      .map((match) => {
+        const exactDay = match.date.getDate() === day;
+        return {
+          ...match,
+          exactDay,
+          label: exactDay ? t.onThisDayHeading : t.thisMonthHeading,
+        };
+      });
+  }, [enrichedEvents, now, t]);
+
+  useEffect(() => {
+    const node = storyRef.current;
+    if (!node || typeof IntersectionObserver === "undefined") {
+      setStoryProgressVisible(false);
+      return undefined;
+    }
+
+    const observer = new IntersectionObserver(
+      ([entry]) => setStoryProgressVisible(entry.isIntersecting),
+      { threshold: 0.04 },
+    );
+
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [storyProgressItems.length]);
+
+  useEffect(() => {
+    if (!storyProgressVisible || !storyProgressItems.length) {
+      return undefined;
+    }
+
+    const updateActiveProgress = () => {
+      const checkpoint = window.innerHeight * 0.42;
+      let active = storyProgressItems[0].key;
+
+      storyProgressItems.forEach((item) => {
+        const target = document.querySelector(
+          `[data-progress-key="${cssEscape(item.targetKey)}"]`,
+        );
+        if (!target) return;
+
+        const rect = target.getBoundingClientRect();
+        if (rect.top <= checkpoint) {
+          active = item.key;
+        }
+      });
+
+      setActiveProgressKey(active);
+    };
+
+    updateActiveProgress();
+    window.addEventListener("scroll", updateActiveProgress, { passive: true });
+    window.addEventListener("resize", updateActiveProgress);
+
+    return () => {
+      window.removeEventListener("scroll", updateActiveProgress);
+      window.removeEventListener("resize", updateActiveProgress);
+    };
+  }, [storyProgressItems, storyProgressVisible]);
+
   const reduceMotion = prefersReducedMotion;
+
+  const scrollToMemoryEvent = (memory) => {
+    if (!memory) return;
+    scrollToEventTime(memory.event.time);
+    setMemoryOpen(false);
+  };
 
   return (
     <main className="app">
+      <VisualBackdrop />
+      <StoryProgressRail
+        items={storyProgressItems}
+        activeKey={activeProgressKey}
+        visible={storyProgressVisible}
+        label={t.storyProgress}
+        onSelect={(item) => scrollToProgressKey(item.targetKey)}
+      />
+      {memoryMatches.length ? (
+        <div className="memory-widget">
+          <button
+            type="button"
+            className="memory-bell"
+            onClick={() => setMemoryOpen((open) => !open)}
+            aria-label="Toggle memory reminders"
+            aria-expanded={memoryOpen}
+          >
+            <span aria-hidden="true">🔔</span>
+            <span className="memory-count">{memoryMatches.length}</span>
+          </button>
+          {memoryOpen ? (
+            <div className="memory-popover" role="list">
+              {memoryMatches.map((memory) => (
+                <button
+                  key={`${memory.event.time}-${memory.event.name}`}
+                  type="button"
+                  className="memory-preview"
+                  onClick={() => scrollToMemoryEvent(memory)}
+                  role="listitem"
+                >
+                  <span className="memory-preview-badge">{memory.label}</span>
+                  <strong>{memory.event.name}</strong>
+                  <span>
+                    {memory.date.toLocaleDateString(locale, {
+                      day: "numeric",
+                      month: "short",
+                    })}
+                  </span>
+                </button>
+              ))}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+      <button
+        type="button"
+        className="memory-mode-button"
+        onClick={() => {
+          setMemoryModeIndex(0);
+          setMemoryModeOpen(true);
+        }}
+        disabled={!photoWallItems.length}
+      >
+        {t.memoryMode}
+      </button>
       <motion.button
         type="button"
         className="lang-toggle"
@@ -899,7 +1245,7 @@ function TimelinePage() {
         </p>
       </section>
 
-      <section className="timeline" aria-label="Our storyline">
+      <section className="timeline" aria-label="Our storyline" ref={storyRef}>
         <h2>{t.timelineHeading}</h2>
         {eventsError ? <p className="timeline-note">{t.errorEvents}</p> : null}
         {loadingEvents ? (
@@ -909,7 +1255,11 @@ function TimelinePage() {
           {timelineItems.map((item) => {
             if (item.type === "month") {
               return (
-                <div key={item.id} className="timeline-month">
+                <div
+                  key={item.id}
+                  className="timeline-month"
+                  data-progress-key={item.progressKey}
+                >
                   <span>{item.label}</span>
                 </div>
               );
@@ -929,6 +1279,77 @@ function TimelinePage() {
           })}
         </div>
       </section>
+
+      {photoWallItems.length ? (
+        <section className="photo-wall" aria-label="Photo wall">
+          <div className="photo-wall-header">
+            <h2>{language === "vi" ? "Tường ảnh" : "Photo wall"}</h2>
+            <p>
+              {language === "vi"
+                ? "Một góc nhỏ gom lại những khoảnh khắc của tụi mình."
+                : "A little corner for the moments we keep coming back to."}
+            </p>
+          </div>
+          <div className="photo-wall-grid">
+            {photoWallItems.map((photo, index) => (
+              <button
+                key={photo.id}
+                type="button"
+                className={`photo-wall-item photo-wall-item-${(index % 7) + 1}`}
+                onClick={() => setActiveWallPhoto(photo)}
+                aria-label={`${photo.eventName} photo ${photo.photoIndex + 1}`}
+              >
+                <img src={photo.src} alt="" loading="lazy" />
+                <span>{photo.eventName}</span>
+              </button>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
+      <AnimatePresence>
+        {memoryModeOpen ? (
+          <MemoryModeOverlay
+            photos={photoWallItems}
+            index={memoryModeIndex}
+            setIndex={setMemoryModeIndex}
+            labels={t}
+            onClose={() => setMemoryModeOpen(false)}
+          />
+        ) : null}
+        {activeWallPhoto ? (
+          <motion.div
+            className="photo-modal-backdrop"
+            role="dialog"
+            aria-modal="true"
+            aria-label={`${activeWallPhoto.eventName} photo`}
+            onClick={() => setActiveWallPhoto(null)}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.18, ease: "easeOut" }}
+          >
+            <motion.div
+              className="photo-modal"
+              onClick={(event) => event.stopPropagation()}
+              initial={{ opacity: 0, scale: 0.96, y: 12 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.96, y: 12 }}
+              transition={{ duration: 0.2, ease: "easeOut" }}
+            >
+              <button
+                type="button"
+                className="photo-modal-close"
+                onClick={() => setActiveWallPhoto(null)}
+                aria-label={t.closePhoto}
+              >
+                ×
+              </button>
+              <img src={activeWallPhoto.src} alt={activeWallPhoto.eventName} />
+            </motion.div>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
     </main>
   );
 }

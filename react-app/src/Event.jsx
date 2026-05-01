@@ -235,9 +235,12 @@ export default function Event({
   return (
     <>
       <motion.article
-        className={`timeline-card vertical side-${event.side}`}
+        className={`timeline-card vertical side-${event.side} card-${
+          event.cardType || "month-1"
+        }`}
         data-event-id={event.time}
         data-event-index={idx}
+        data-progress-key={event.progressKey}
         ref={cardRef}
         variants={variants}
         custom={event.side}
