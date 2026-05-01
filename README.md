@@ -25,8 +25,9 @@ The admin page reads and writes events through Vercel Functions backed by Vercel
 Required Vercel environment variables:
 
 - `BLOB_READ_WRITE_TOKEN` - created automatically when the Blob store is connected.
-- `ADMIN_API_SECRET` - set this to the same value you use for `VITE_ADMIN_PASSWORD`.
 - `VITE_ADMIN_PASSWORD` - the password shown to the browser for the admin login.
+- `ADMIN_API_SECRET` - secret checked by `/api/events` and `/api/upload`.
+- `VITE_ADMIN_API_SECRET` - set this to the same value as `ADMIN_API_SECRET` so the admin UI can send it.
 
 Seed the current local events into Blob:
 

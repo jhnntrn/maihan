@@ -213,10 +213,11 @@ function AdminPage() {
   const handleLogin = (e) => {
     e.preventDefault();
     const secret = import.meta.env.VITE_ADMIN_PASSWORD || "mtriyeumaihan";
+    const apiSecret = import.meta.env.VITE_ADMIN_API_SECRET || password;
     if (password === secret) {
       localStorage.setItem("adminAuthed", "true");
-      sessionStorage.setItem("adminSecret", password);
-      setAdminSecret(password);
+      sessionStorage.setItem("adminSecret", apiSecret);
+      setAdminSecret(apiSecret);
       setAuthed(true);
       setError("");
     } else {

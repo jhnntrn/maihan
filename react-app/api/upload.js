@@ -40,6 +40,10 @@ function dataUrlToBuffer(dataUrl) {
   };
 }
 
+function blobTokenIsMissing() {
+  return !process.env.BLOB_READ_WRITE_TOKEN;
+}
+
 export default async function handler(request, response) {
   if (request.method !== "POST") {
     response.setHeader("Allow", "POST");
@@ -50,19 +54,31 @@ export default async function handler(request, response) {
     return response.status(401).json({ error: "Unauthorized" });
   }
 
-  const body = await readJsonBody(request);
-  const { dataUrl, filename } = body || {};
-
-  if (!dataUrl) {
-    return response.status(400).json({ error: "Missing image data." });
+  if (blobTokenIsMissing()) {
+    return response
+      .status(500)
+      .json({ error: "BLOB_READ_WRITE_TOKEN is missing." });
   }
 
-  const { buffer, contentType } = dataUrlToBuffer(dataUrl);
-  const blob = await put(`events/${safeFilename(filename)}`, buffer, {
-    access: "public",
-    addRandomSuffix: true,
-    contentType,
-  });
+  try {
+    const body = await readJsonBody(request);
+    const { dataUrl, filename } = body || {};
 
-  return response.status(200).json({ url: blob.url, pathname: blob.pathname });
+    if (!dataUrl) {
+      return response.status(400).json({ error: "Missing image data." });
+    }
+
+    const { buffer, contentType } = dataUrlToBuffer(dataUrl);
+    const blob = await put(`events/${safeFilename(filename)}`, buffer, {
+      access: "public",
+      addRandomSuffix: true,
+      contentType,
+    });
+
+    return response.status(200).json({ url: blob.url, pathname: blob.pathname });
+  } catch (error) {
+    return response.status(500).json({
+      error: error instanceof Error ? error.message : "Blob upload failed.",
+    });
+  }
 }

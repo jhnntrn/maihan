@@ -22,45 +22,69 @@ async function readJsonBody(request) {
   return text ? JSON.parse(text) : null;
 }
 
+function blobTokenIsMissing() {
+  return !process.env.BLOB_READ_WRITE_TOKEN;
+}
+
 export default async function handler(request, response) {
   response.setHeader("Cache-Control", "no-store");
 
-  if (request.method === "GET") {
-    const blob = await get(EVENTS_PATH, { access: "public" });
+  try {
+    if (request.method === "GET") {
+      if (blobTokenIsMissing()) {
+        return response
+          .status(500)
+          .json({ error: "BLOB_READ_WRITE_TOKEN is missing." });
+      }
 
-    if (!blob) {
-      return response.status(200).json([]);
+      const blob = await get(EVENTS_PATH, { access: "public" });
+
+      if (!blob) {
+        return response.status(200).json([]);
+      }
+
+      const eventsResponse = await fetch(blob.url, { cache: "no-store" });
+      if (!eventsResponse.ok) {
+        return response.status(502).json({ error: "Could not load events." });
+      }
+
+      const events = await eventsResponse.json();
+      return response.status(200).json(Array.isArray(events) ? events : []);
     }
 
-    const eventsResponse = await fetch(blob.url, { cache: "no-store" });
-    if (!eventsResponse.ok) {
-      return response.status(502).json({ error: "Could not load events." });
+    if (request.method === "PUT") {
+      if (!isAuthed(request)) {
+        return response.status(401).json({ error: "Unauthorized" });
+      }
+
+      if (blobTokenIsMissing()) {
+        return response
+          .status(500)
+          .json({ error: "BLOB_READ_WRITE_TOKEN is missing." });
+      }
+
+      const events = await readJsonBody(request);
+      if (!Array.isArray(events)) {
+        return response
+          .status(400)
+          .json({ error: "Expected an events array." });
+      }
+
+      const blob = await put(EVENTS_PATH, JSON.stringify(events, null, 2), {
+        access: "public",
+        allowOverwrite: true,
+        cacheControlMaxAge: 60,
+        contentType: "application/json",
+      });
+
+      return response.status(200).json({ ok: true, url: blob.url });
     }
 
-    const events = await eventsResponse.json();
-    return response.status(200).json(Array.isArray(events) ? events : []);
-  }
-
-  if (request.method === "PUT") {
-    if (!isAuthed(request)) {
-      return response.status(401).json({ error: "Unauthorized" });
-    }
-
-    const events = await readJsonBody(request);
-    if (!Array.isArray(events)) {
-      return response.status(400).json({ error: "Expected an events array." });
-    }
-
-    const blob = await put(EVENTS_PATH, JSON.stringify(events, null, 2), {
-      access: "public",
-      allowOverwrite: true,
-      cacheControlMaxAge: 60,
-      contentType: "application/json",
+    response.setHeader("Allow", "GET, PUT");
+    return response.status(405).json({ error: "Method not allowed" });
+  } catch (error) {
+    return response.status(500).json({
+      error: error instanceof Error ? error.message : "Blob operation failed.",
     });
-
-    return response.status(200).json({ ok: true, url: blob.url });
   }
-
-  response.setHeader("Allow", "GET, PUT");
-  return response.status(405).json({ error: "Method not allowed" });
 }
