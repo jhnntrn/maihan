@@ -83,10 +83,10 @@ async function fetchJson(url) {
 async function fetchEvents() {
   try {
     const data = await fetchJson(EVENTS_API_URL);
-    return Array.isArray(data) ? data : [];
+    return normalizeEvents(Array.isArray(data) ? data : []);
   } catch {
     const data = await fetchJson(eventsUrl);
-    return Array.isArray(data) ? data : [];
+    return normalizeEvents(Array.isArray(data) ? data : []);
   }
 }
 
@@ -112,6 +112,33 @@ function compareEventsByTime(a, b) {
   return Date.parse(a.time) - Date.parse(b.time);
 }
 
+function normalizeBlobPictureUrl(src) {
+  if (!src || typeof src !== "string") return src;
+  if (src.startsWith("/api/blob?")) return src;
+
+  try {
+    const url = new URL(src);
+    if (!url.hostname.endsWith(".private.blob.vercel-storage.com")) {
+      return src;
+    }
+    const pathname = url.pathname.replace(/^\/+/, "");
+    return pathname
+      ? `/api/blob?pathname=${encodeURIComponent(pathname)}`
+      : src;
+  } catch {
+    return src;
+  }
+}
+
+function normalizeEvents(events) {
+  return events.map((event) => ({
+    ...event,
+    pictures: Array.isArray(event.pictures)
+      ? event.pictures.map(normalizeBlobPictureUrl)
+      : [],
+  }));
+}
+
 function createRandomSeed() {
   if (typeof crypto !== "undefined" && crypto.getRandomValues) {
     const values = new Uint32Array(1);
@@ -134,6 +161,7 @@ function AdminPage() {
   const [loading, setLoading] = useState(false);
   const [fetchError, setFetchError] = useState("");
   const [importStatus, setImportStatus] = useState("");
+  const [workStatus, setWorkStatus] = useState("");
   const importInputRef = useRef(null);
 
   const downloadJson = () => {
@@ -150,14 +178,33 @@ function AdminPage() {
     window.setTimeout(() => URL.revokeObjectURL(url), 0);
   };
 
+  const loadEventsFromSource = async () => {
+    setLoading(true);
+    setFetchError("");
+    setWorkStatus("");
+
+    try {
+      const data = await fetchEvents();
+      setEvents(data);
+      setWorkStatus(
+        `Loaded ${data.length} event${data.length === 1 ? "" : "s"}.`
+      );
+    } catch {
+      setFetchError("Could not load events.");
+      setEvents([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
     if (!authed) return;
     let cancelled = false;
 
-    setLoading(true);
-    setFetchError("");
-
     async function loadEvents() {
+      setLoading(true);
+      setFetchError("");
+
       try {
         const data = await fetchEvents();
         if (!cancelled) {
@@ -196,10 +243,14 @@ function AdminPage() {
       if (!Array.isArray(parsed)) {
         throw new Error("File must contain a JSON array of events.");
       }
-      setEvents(parsed);
+      const normalized = normalizeEvents(parsed);
+      setEvents(normalized);
       setImportStatus(
-        `Imported ${parsed.length} event${parsed.length === 1 ? "" : "s"}.`
+        `Imported ${normalized.length} event${
+          normalized.length === 1 ? "" : "s"
+        } into preview. Use "Save preview" to write it to Blob.`
       );
+      setWorkStatus("");
     } catch (err) {
       setImportStatus(err.message || "Import failed.");
     }
@@ -208,6 +259,18 @@ function AdminPage() {
   const handleSaveEvents = async (nextEvents) => {
     await saveEvents(nextEvents, adminSecret);
     setEvents(nextEvents);
+  };
+
+  const handleSavePreview = async () => {
+    setWorkStatus("");
+    try {
+      await handleSaveEvents(events);
+      setWorkStatus(
+        `Saved ${events.length} event${events.length === 1 ? "" : "s"} to Blob.`
+      );
+    } catch (err) {
+      setWorkStatus(err.message || "Save failed.");
+    }
   };
 
   const handleLogin = (e) => {
@@ -256,20 +319,49 @@ function AdminPage() {
         <a href="/" className="timeline-note">
           ← Back to timeline
         </a>
-        <button
-          type="button"
-          className="link-button button-download"
-          onClick={downloadJson}
-        >
-          Download events.json
-        </button>
-        <button
-          type="button"
-          className="link-button button-import"
-          onClick={() => importInputRef.current?.click()}
-        >
-          Import events.json
-        </button>
+      </header>
+      <section className="work-panel" aria-label="Event data tools">
+        <div>
+          <h3>Work panel</h3>
+          <p>
+            Import updates the browser preview first. Save preview writes the
+            current event list to Blob.
+          </p>
+        </div>
+        <div className="work-actions">
+          <button
+            type="button"
+            className="link-button button-download"
+            onClick={downloadJson}
+            disabled={loading}
+          >
+            Download JSON
+          </button>
+          <button
+            type="button"
+            className="link-button button-import"
+            onClick={() => importInputRef.current?.click()}
+            disabled={loading}
+          >
+            Import JSON
+          </button>
+          <button
+            type="button"
+            className="link-button button-save"
+            onClick={handleSavePreview}
+            disabled={loading}
+          >
+            Save preview
+          </button>
+          <button
+            type="button"
+            className="link-button button-cancel"
+            onClick={loadEventsFromSource}
+            disabled={loading}
+          >
+            Reload from Blob
+          </button>
+        </div>
         <input
           ref={importInputRef}
           type="file"
@@ -281,8 +373,9 @@ function AdminPage() {
             e.target.value = "";
           }}
         />
-      </header>
+      </section>
       {importStatus ? <p className="timeline-note">{importStatus}</p> : null}
+      {workStatus ? <p className="timeline-note">{workStatus}</p> : null}
       {fetchError ? <p className="timeline-note">{fetchError}</p> : null}
       {loading ? <p className="timeline-note">Loading events...</p> : null}
       <EventAdmin

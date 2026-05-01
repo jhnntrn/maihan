@@ -1,6 +1,7 @@
 import { get, put } from "@vercel/blob";
 
 const EVENTS_PATH = "data/events.json";
+const BLOB_ACCESS = "private";
 
 function isAuthed(request) {
   const expectedSecret = process.env.ADMIN_API_SECRET;
@@ -26,6 +27,11 @@ function blobTokenIsMissing() {
   return !process.env.BLOB_READ_WRITE_TOKEN;
 }
 
+async function streamToText(stream) {
+  const response = new Response(stream);
+  return response.text();
+}
+
 export default async function handler(request, response) {
   response.setHeader("Cache-Control", "no-store");
 
@@ -37,18 +43,13 @@ export default async function handler(request, response) {
           .json({ error: "BLOB_READ_WRITE_TOKEN is missing." });
       }
 
-      const blob = await get(EVENTS_PATH, { access: "public" });
+      const result = await get(EVENTS_PATH, { access: BLOB_ACCESS });
 
-      if (!blob) {
+      if (!result || result.statusCode !== 200 || !result.stream) {
         return response.status(200).json([]);
       }
 
-      const eventsResponse = await fetch(blob.url, { cache: "no-store" });
-      if (!eventsResponse.ok) {
-        return response.status(502).json({ error: "Could not load events." });
-      }
-
-      const events = await eventsResponse.json();
+      const events = JSON.parse(await streamToText(result.stream));
       return response.status(200).json(Array.isArray(events) ? events : []);
     }
 
@@ -71,7 +72,7 @@ export default async function handler(request, response) {
       }
 
       const blob = await put(EVENTS_PATH, JSON.stringify(events, null, 2), {
-        access: "public",
+        access: BLOB_ACCESS,
         allowOverwrite: true,
         cacheControlMaxAge: 60,
         contentType: "application/json",

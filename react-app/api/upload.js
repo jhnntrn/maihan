@@ -1,5 +1,7 @@
 import { put } from "@vercel/blob";
 
+const BLOB_ACCESS = "private";
+
 function isAuthed(request) {
   const expectedSecret = process.env.ADMIN_API_SECRET;
   if (!expectedSecret) return false;
@@ -70,12 +72,15 @@ export default async function handler(request, response) {
 
     const { buffer, contentType } = dataUrlToBuffer(dataUrl);
     const blob = await put(`events/${safeFilename(filename)}`, buffer, {
-      access: "public",
+      access: BLOB_ACCESS,
       addRandomSuffix: true,
       contentType,
     });
 
-    return response.status(200).json({ url: blob.url, pathname: blob.pathname });
+    return response.status(200).json({
+      url: `/api/blob?pathname=${encodeURIComponent(blob.pathname)}`,
+      pathname: blob.pathname,
+    });
   } catch (error) {
     return response.status(500).json({
       error: error instanceof Error ? error.message : "Blob upload failed.",

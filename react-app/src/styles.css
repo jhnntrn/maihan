@@ -649,6 +649,41 @@ h2 {
   gap: 12px;
 }
 
+.work-panel {
+  width: min(960px, 100%);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: center;
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.78);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: var(--shadow);
+  text-align: left;
+}
+
+.work-panel h3 {
+  margin: 0 0 4px;
+  color: var(--accent);
+  font-size: clamp(24px, 3.4vw, 32px);
+  line-height: 1.08;
+}
+
+.work-panel p {
+  margin: 0;
+  color: var(--subtext);
+  font-size: 14px;
+  line-height: 1.35;
+}
+
+.work-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 .admin-header {
   display: flex;
   justify-content: space-between;
@@ -876,7 +911,8 @@ h2 {
 }
 
 .admin-form button:disabled,
-.admin-event-item button:disabled {
+.admin-event-item button:disabled,
+.link-button:disabled {
   cursor: not-allowed;
   opacity: 0.58;
   transform: none;
@@ -1062,6 +1098,18 @@ button.button-danger {
 }
 
 @media (max-width: 680px) {
+  .work-panel {
+    grid-template-columns: 1fr;
+  }
+
+  .work-actions {
+    justify-content: stretch;
+  }
+
+  .work-actions .link-button {
+    flex: 1 1 140px;
+  }
+
   .admin-event-item {
     grid-template-columns: 1fr;
   }
