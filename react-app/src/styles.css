@@ -1,12 +1,31 @@
+@font-face {
+  font-family: "SFU Century Schoolbook";
+  src: url("/fonts/sfu-century-schoolbook-bt-roman.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
 :root {
-  font-family: "Inter", "Playfair Display", system-ui, -apple-system,
-    BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family:
+    "SFU Century Schoolbook",
+    "Century Gothic",
+    CenturyGothic,
+    "AppleGothic",
+    "Century Schoolbook",
+    Century,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
   --text: #45333e;
   --subtext: #9a3b72;
   --accent: #ff67a1;
   --accent-soft: #ff9cc9;
   --intro: #ff97bf;
-  --bg: radial-gradient(circle at 20% 20%, #ffd7ec, #ffc3e1 38%),
+  --bg:
+    radial-gradient(circle at 20% 20%, #ffd7ec, #ffc3e1 38%),
     radial-gradient(circle at 80% 0%, #ffb9db, #ffe7f4 42%),
     radial-gradient(circle at 50% 80%, #ffe0f1, #fff1f9 55%);
   --panel: rgba(255, 255, 255, 0.8);
@@ -93,7 +112,10 @@ main.app {
   background: transparent;
   padding: 0;
   cursor: pointer;
-  transition: transform 140ms ease, background 140ms ease, box-shadow 160ms ease;
+  transition:
+    transform 140ms ease,
+    background 140ms ease,
+    box-shadow 160ms ease;
   will-change: transform;
 }
 
@@ -136,10 +158,16 @@ main.app {
   z-index: 1;
 }
 h1 {
-  margin: 10px 0 8px;
-  font-size: clamp(32px, 6vw, 50px);
-  letter-spacing: -0.01em;
-  font-family: "Playfair Display", "Inter", serif;
+  margin: 8px 0 10px;
+  font-size: clamp(42px, 8vw, 72px);
+  line-height: 0.98;
+  letter-spacing: 0;
+  font-family:
+    "SFU Century Schoolbook",
+    "Century Schoolbook",
+    Century,
+    "Century Gothic",
+    serif;
   color: var(--accent);
 }
 
@@ -155,11 +183,16 @@ h2,
 
 h2 {
   color: var(--intro);
+  font-size: clamp(28px, 5vw, 42px);
+  line-height: 1.08;
+  margin: 0;
 }
 
 .sub {
   margin: 0;
   color: var(--subtext);
+  font-size: clamp(17px, 2.8vw, 22px);
+  line-height: 1.35;
 }
 
 .eyebrow {
@@ -168,7 +201,7 @@ h2 {
   font-weight: 800;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  font-size: 12px;
+  font-size: 13px;
 }
 .sentence {
   max-width: 880px;
@@ -181,8 +214,8 @@ h2 {
 
 .sentence-text {
   margin: 0;
-  font-size: clamp(20px, 4vw, 26px);
-  line-height: 1.6;
+  font-size: clamp(23px, 4.6vw, 34px);
+  line-height: 1.45;
   color: var(--text);
 }
 
@@ -206,6 +239,7 @@ h2 {
   white-space: nowrap;
   perspective: 800px;
   gap: 6px;
+  font-size: 1.08em;
 }
 
 .unit-number {
@@ -259,8 +293,8 @@ h2 {
 
 .note p {
   margin: 0;
-  font-size: 16px;
-  line-height: 1.5;
+  font-size: clamp(16px, 2.4vw, 20px);
+  line-height: 1.45;
 }
 
 .note-text {
@@ -305,8 +339,9 @@ h2 {
 }
 
 .totals-heading {
-  margin: 10px 0 -4px;
-  font-size: clamp(16px, 4vw, 18px);
+  margin: 12px 0 -2px;
+  font-size: clamp(24px, 4.2vw, 34px);
+  line-height: 1.12;
   color: var(--intro);
   letter-spacing: 0.01em;
 }
@@ -338,13 +373,14 @@ h2 {
   font-weight: 800;
   color: var(--accent);
   display: inline-flex;
-  font-size: clamp(16px, 5vw, 18px);
+  font-size: clamp(22px, 5vw, 30px);
+  line-height: 1;
 }
 
 .total-label {
   letter-spacing: 0.02em;
   color: var(--subtext);
-  font-size: clamp(11px, 3.5vw, 13px);
+  font-size: clamp(12px, 2.6vw, 15px);
 }
 
 .total-digit {
@@ -442,6 +478,8 @@ h2 {
   border-radius: 999px;
   color: var(--accent);
   font-weight: 700;
+  font-size: clamp(16px, 3vw, 20px);
+  line-height: 1.15;
   letter-spacing: 0.02em;
   box-shadow: var(--shadow);
   margin: 0 auto;
@@ -458,20 +496,23 @@ h2 {
 .event-date {
   margin: 0;
   color: var(--subtext);
-  font-size: 13px;
+  font-size: clamp(12px, 2.2vw, 14px);
   letter-spacing: 0.01em;
 }
 
 .event-name {
   margin: 0;
   color: var(--accent);
-  font-size: 18px;
+  font-size: clamp(24px, 4.6vw, 34px);
+  line-height: 1.08;
+  font-weight: 700;
 }
 
 .event-desc {
   margin: 0;
   color: var(--text);
-  line-height: 1.55;
+  font-size: clamp(16px, 2.6vw, 19px);
+  line-height: 1.45;
 }
 
 .event-photos-clip {
@@ -510,7 +551,9 @@ h2 {
   border: 1px solid var(--border);
   box-shadow: var(--shadow);
   scroll-snap-align: start;
-  transition: transform 220ms ease, box-shadow 220ms ease;
+  transition:
+    transform 220ms ease,
+    box-shadow 220ms ease;
   transform-origin: center center;
 }
 
@@ -571,11 +614,13 @@ h2 {
   height: 40px;
   border-radius: 50%;
   cursor: pointer;
-  font-size: 22px;
+  font-size: 24px;
   line-height: 1;
   display: grid;
   place-items: center;
-  transition: background 160ms ease, transform 160ms ease;
+  transition:
+    background 160ms ease,
+    transform 160ms ease;
 }
 
 .photo-modal-close:hover {
@@ -614,10 +659,17 @@ h2 {
   gap: 12px;
 }
 
+.admin-header h3 {
+  margin: 0;
+  color: var(--accent);
+  font-size: clamp(26px, 4vw, 36px);
+  line-height: 1.08;
+}
+
 .admin-hint {
   margin: 0;
   color: var(--subtext);
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .admin-form {
@@ -632,6 +684,8 @@ h2 {
   gap: 12px;
   text-align: left;
   color: var(--accent);
+  font-size: 20px;
+  line-height: 1.15;
 }
 
 .admin-form label {
@@ -639,6 +693,7 @@ h2 {
   gap: 4px;
   text-align: left;
   color: var(--subtext);
+  font-size: 14px;
 }
 
 .admin-form input,
@@ -660,7 +715,9 @@ h2 {
   border-radius: 12px;
   padding: 10px;
   background: rgba(255, 255, 255, 0.75);
-  transition: border-color 160ms ease, background 160ms ease;
+  transition:
+    border-color 160ms ease,
+    background 160ms ease;
   display: grid;
   gap: 8px;
 }
@@ -676,7 +733,7 @@ h2 {
 
 .dropzone-text {
   margin: 0;
-  font-size: 13px;
+  font-size: 14px;
   color: var(--subtext);
   display: flex;
   flex-wrap: wrap;
@@ -715,17 +772,32 @@ h2 {
 
 .thumb-remove {
   position: absolute;
-  top: 4px;
-  right: 4px;
-  width: 22px;
-  height: 22px;
-  border: none;
-  border-radius: 50%;
-  background: rgba(0, 0, 0, 0.6);
+  top: 6px;
+  right: 6px;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(5px);
   color: #fff;
   cursor: pointer;
-  font-size: 14px;
+  font-size: 20px;
+  font-weight: 700;
   line-height: 1;
+  text-shadow: 0 1px 5px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18);
+  transition:
+    background 140ms ease,
+    transform 140ms ease;
+}
+
+.thumb-remove:hover {
+  background: rgba(255, 255, 255, 0.32);
+  transform: translateY(-1px) scale(1.03);
 }
 
 .thumb-clear {
@@ -735,17 +807,18 @@ h2 {
   background: none;
   color: var(--accent);
   cursor: pointer;
-  font-size: 13px;
+  font-size: 14px;
   padding: 4px 0;
 }
 
 .link-button {
-  border: none;
-  background: none;
+  border: 1px solid rgba(255, 103, 161, 0.32);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.45);
   color: var(--accent);
   cursor: pointer;
-  text-decoration: underline;
-  padding: 0;
+  text-decoration: none;
+  padding: 8px 12px;
   font: inherit;
 }
 
@@ -758,10 +831,65 @@ h2 {
   cursor: pointer;
 }
 
+.admin-form button,
+.admin-event-item button,
+.link-button,
+.photo-modal-close,
+.thumb-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 34px;
+  overflow-wrap: anywhere;
+  text-align: center;
+  touch-action: manipulation;
+  transition:
+    background 150ms ease,
+    border-color 150ms ease,
+    box-shadow 150ms ease,
+    color 150ms ease,
+    opacity 150ms ease,
+    transform 150ms ease;
+}
+
+.admin-form button:hover,
+.admin-event-item button:hover,
+.link-button:hover,
+.photo-modal-close:hover,
+.thumb-remove:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 18px rgba(255, 103, 161, 0.24);
+}
+
+.admin-form button:active,
+.admin-event-item button:active,
+.link-button:active,
+.photo-modal-close:active,
+.thumb-remove:active {
+  transform: translateY(0) scale(0.97);
+}
+
+.admin-form button:focus-visible,
+.admin-event-item button:focus-visible,
+.link-button:focus-visible,
+.photo-modal-close:focus-visible,
+.thumb-remove:focus-visible {
+  outline: 2px solid rgba(255, 103, 161, 0.72);
+  outline-offset: 3px;
+}
+
+.admin-form button:disabled,
+.admin-event-item button:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+  transform: none;
+  box-shadow: none;
+}
+
 .admin-status {
   margin: 0;
   color: var(--accent);
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .admin-event-thumbs {
@@ -811,6 +939,12 @@ h2 {
   min-width: 0;
 }
 
+.admin-event-summary strong {
+  color: var(--accent);
+  font-size: clamp(20px, 3.2vw, 26px);
+  line-height: 1.1;
+}
+
 .admin-event-meta {
   color: var(--subtext);
   font-size: 12px;
@@ -819,6 +953,7 @@ h2 {
 .admin-event-description {
   margin: 0;
   color: var(--text);
+  font-size: 15px;
   line-height: 1.4;
   overflow-wrap: anywhere;
 }
@@ -843,16 +978,56 @@ h2 {
 }
 
 .admin-event-item button {
-  border: none;
-  background: #d9534f;
-  color: #fff;
+  border: 1px solid rgba(255, 103, 161, 0.36);
+  background: rgba(255, 214, 234, 0.72);
+  color: #9a3b72;
   padding: 8px 12px;
   border-radius: 8px;
   cursor: pointer;
 }
 
-.admin-event-item .admin-secondary-button {
-  background: var(--accent);
+button.button-save {
+  background: linear-gradient(135deg, #ff67a1, #f04b93);
+  border-color: rgba(255, 255, 255, 0.42);
+  color: #fff;
+}
+
+button.button-edit,
+.link-button.button-import {
+  background: rgba(255, 156, 201, 0.34);
+  border-color: rgba(255, 103, 161, 0.58);
+  color: #8b2d66;
+}
+
+.link-button.button-download {
+  background: rgba(255, 156, 201, 0.18);
+  border-color: rgba(255, 103, 161, 0.45);
+  color: #b92f78;
+}
+
+button.button-cancel {
+  background: rgba(255, 255, 255, 0.62);
+  border-color: rgba(154, 59, 114, 0.24);
+  color: var(--subtext);
+}
+
+button.button-danger {
+  background: linear-gradient(135deg, #ff7a8a, #d9536a);
+  border-color: rgba(255, 255, 255, 0.42);
+  color: #fff;
+}
+
+.admin-form .thumb-remove,
+.admin-event-item .thumb-remove {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  min-height: 26px;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.2);
 }
 
 .admin-inline-form {
@@ -871,6 +1046,7 @@ h2 {
   display: grid;
   gap: 4px;
   color: var(--subtext);
+  font-size: 14px;
 }
 
 .admin-inline-form input,
@@ -886,7 +1062,7 @@ h2 {
 .timeline-note {
   margin: 0 0 8px;
   color: var(--subtext);
-  font-size: 13px;
+  font-size: 14px;
 }
 
 @media (max-width: 680px) {

@@ -229,7 +229,7 @@ function AdminPage() {
     return (
       <main className="app">
         <section className="note" aria-live="polite">
-          <h2>Admin login</h2>
+          <h2>Event editor</h2>
           <form className="admin-form" onSubmit={handleLogin}>
             <label>
               Password
@@ -251,17 +251,21 @@ function AdminPage() {
   return (
     <main className="app">
       <header>
-        <h1>Admin Events</h1>
+        <h1>Event Studio</h1>
         <p className="sub">Manage timeline events and pictures.</p>
         <a href="/" className="timeline-note">
           ← Back to timeline
         </a>
-        <button type="button" className="link-button" onClick={downloadJson}>
+        <button
+          type="button"
+          className="link-button button-download"
+          onClick={downloadJson}
+        >
           Download events.json
         </button>
         <button
           type="button"
-          className="link-button"
+          className="link-button button-import"
           onClick={() => importInputRef.current?.click()}
         >
           Import events.json

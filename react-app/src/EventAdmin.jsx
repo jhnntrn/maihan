@@ -89,7 +89,7 @@ async function fileToOptimizedDataUrl(file) {
 
 async function uploadImageDataUrl(dataUrl, filename, adminSecret) {
   if (!adminSecret) {
-    throw new Error("Admin secret is missing.");
+    throw new Error("Editor secret is missing.");
   }
 
   const response = await fetch("/api/upload", {
@@ -109,16 +109,32 @@ async function uploadImageDataUrl(dataUrl, filename, adminSecret) {
   return response.json();
 }
 
-async function fileToOptimizedPicture(file, adminSecret) {
+async function uploadPendingPictures(pictures, adminSecret) {
+  const uploadedPictures = [];
+  let uploadCount = 0;
+
+  for (const picture of pictures) {
+    if (!String(picture).startsWith("data:image/")) {
+      uploadedPictures.push(picture);
+      continue;
+    }
+
+    const blob = await uploadImageDataUrl(
+      picture,
+      `event-photo-${Date.now()}-${uploadCount + 1}.jpg`,
+      adminSecret
+    );
+    uploadedPictures.push(blob.url);
+    uploadCount += 1;
+  }
+
+  return { pictures: uploadedPictures, uploadCount };
+}
+
+async function fileToOptimizedPicture(file) {
   const dataUrl = await fileToOptimizedDataUrl(file);
   if (!dataUrl) return null;
-
-  try {
-    const blob = await uploadImageDataUrl(dataUrl, file.name, adminSecret);
-    return { src: blob.url, uploaded: true };
-  } catch {
-    return { src: dataUrl, uploaded: false };
-  }
+  return dataUrl;
 }
 
 function compareEventsByTime(a, b) {
@@ -151,7 +167,6 @@ function mergePictures(current, next) {
 }
 
 function PictureEditor({
-  adminSecret,
   picturesInput,
   setPicturesInput,
   setStatus,
@@ -178,23 +193,16 @@ function PictureEditor({
     setBusy(true);
     setStatus("");
     const urls = [];
-    let uploadFailures = 0;
     try {
       for (const file of files) {
-        const picture = await fileToOptimizedPicture(file, adminSecret);
-        if (picture?.src) {
-          urls.push(picture.src);
-          if (!picture.uploaded) uploadFailures += 1;
-        }
+        const picture = await fileToOptimizedPicture(file);
+        if (picture) urls.push(picture);
       }
 
       if (urls.length) {
         addPictures(urls);
-        const uploadNote = uploadFailures
-          ? ` ${uploadFailures} image${uploadFailures === 1 ? "" : "s"} stayed local because Blob upload failed.`
-          : "";
         setStatus(
-          `Added ${urls.length} image${urls.length === 1 ? "" : "s"}.${uploadNote}`
+          `Prepared ${urls.length} image${urls.length === 1 ? "" : "s"} for upload.`
         );
       }
     } finally {
@@ -327,7 +335,6 @@ function EventSummary({ event }) {
 }
 
 function InlineEventEditor({
-  adminSecret,
   event,
   busy,
   setBusy,
@@ -398,7 +405,6 @@ function InlineEventEditor({
       <label>
         Pictures
         <PictureEditor
-          adminSecret={adminSecret}
           picturesInput={picturesInput}
           setPicturesInput={setPicturesInput}
           setStatus={setStatus}
@@ -408,13 +414,23 @@ function InlineEventEditor({
         />
       </label>
       <div className="admin-event-actions">
-        <button type="submit" className="admin-secondary-button" disabled={busy}>
+        <button type="submit" className="button-save" disabled={busy}>
           Save
         </button>
-        <button type="button" onClick={onCancel} disabled={busy}>
+        <button
+          type="button"
+          className="button-cancel"
+          onClick={onCancel}
+          disabled={busy}
+        >
           Cancel
         </button>
-        <button type="button" onClick={onDelete} disabled={busy}>
+        <button
+          type="button"
+          className="button-danger"
+          onClick={onDelete}
+          disabled={busy}
+        >
           Delete
         </button>
       </div>
@@ -472,6 +488,18 @@ export default function EventAdmin({
     }
   };
 
+  const preparePicturesForSave = async (pictures) => {
+    const result = await uploadPendingPictures(pictures, adminSecret);
+    return {
+      ...result,
+      uploadNote: result.uploadCount
+        ? ` Uploaded ${result.uploadCount} image${
+            result.uploadCount === 1 ? "" : "s"
+          } to Blob.`
+        : "",
+    };
+  };
+
   const handleAdd = async (event) => {
     event.preventDefault();
     setStatus("");
@@ -481,28 +509,69 @@ export default function EventAdmin({
       return;
     }
 
+    setBusy(true);
+    let uploadedPictures;
+    let uploadNote = "";
+    try {
+      const result = await preparePicturesForSave(picturesList);
+      uploadedPictures = result.pictures;
+      uploadNote = result.uploadNote;
+    } catch (error) {
+      setStatus(`Image upload failed: ${error.message}`);
+      setBusy(false);
+      return;
+    }
+    setBusy(false);
+
     const nextEvent = {
       id: createEventId(),
       name,
       description,
       time: normalizeDate(time),
-      pictures: picturesList,
+      pictures: uploadedPictures,
     };
 
     const nextEvents = [...events, nextEvent];
     resetAddForm();
-    await commitEvents(nextEvents, "Added event and saved to Blob.");
+    await commitEvents(
+      nextEvents,
+      `Added event and saved to Blob.${uploadNote}`
+    );
   };
 
   const handleSave = async (nextEvent) => {
+    setBusy(true);
+    let uploadedPictures;
+    let uploadNote = "";
+    try {
+      const result = await preparePicturesForSave(nextEvent.pictures || []);
+      uploadedPictures = result.pictures;
+      uploadNote = result.uploadNote;
+    } catch (error) {
+      setStatus(`Image upload failed: ${error.message}`);
+      setBusy(false);
+      return;
+    }
+    setBusy(false);
+
     const nextEvents = events.map((event) =>
-        eventKey(event) === editingId ? { ...nextEvent, id: editingId } : event
+      eventKey(event) === editingId
+        ? { ...nextEvent, id: editingId, pictures: uploadedPictures }
+        : event
     );
     setEditingId(null);
-    await commitEvents(nextEvents, "Updated event and saved to Blob.");
+    await commitEvents(
+      nextEvents,
+      `Updated event and saved to Blob.${uploadNote}`
+    );
   };
 
   const handleDelete = async (id) => {
+    const confirmed = window.confirm(
+      "Delete this event? This cannot be undone after saving."
+    );
+    if (!confirmed) return;
+
     const nextEvents = events.filter((event) => eventKey(event) !== id);
     if (editingId === id) setEditingId(null);
     await commitEvents(nextEvents, "Deleted event and saved to Blob.");
@@ -512,7 +581,7 @@ export default function EventAdmin({
     <section className="admin-panel" aria-label="Manage events">
       <div className="admin-header">
         <h3>Manage events</h3>
-        <p className="admin-hint">Data is stored locally in your browser.</p>
+        <p className="admin-hint">Changes save to your connected event data.</p>
       </div>
 
       <form className="admin-form" onSubmit={handleAdd}>
@@ -548,7 +617,6 @@ export default function EventAdmin({
         <label>
           Pictures
           <PictureEditor
-            adminSecret={adminSecret}
             picturesInput={picturesInput}
             setPicturesInput={setPicturesInput}
             setStatus={setStatus}
@@ -556,7 +624,7 @@ export default function EventAdmin({
             busy={busy}
           />
         </label>
-        <button type="submit" disabled={busy}>
+        <button type="submit" className="button-save" disabled={busy}>
           {busy ? "Saving..." : "Add event"}
         </button>
         {status ? <p className="admin-status">{status}</p> : null}
@@ -579,7 +647,6 @@ export default function EventAdmin({
               >
                 {isEditing ? (
                   <InlineEventEditor
-                    adminSecret={adminSecret}
                     event={event}
                     busy={busy}
                     setBusy={setBusy}
@@ -594,7 +661,7 @@ export default function EventAdmin({
                     <div className="admin-event-actions">
                       <button
                         type="button"
-                        className="admin-secondary-button"
+                        className="button-edit"
                         onClick={() => {
                           setEditingId(id);
                           setStatus("");
@@ -605,6 +672,7 @@ export default function EventAdmin({
                       </button>
                       <button
                         type="button"
+                        className="button-danger"
                         onClick={() => handleDelete(id)}
                         disabled={busy}
                       >
