@@ -163,10 +163,7 @@ h1 {
   line-height: 0.98;
   letter-spacing: 0;
   font-family:
-    "SFU Century Schoolbook",
-    "Century Schoolbook",
-    Century,
-    "Century Gothic",
+    "SFU Century Schoolbook", "Century Schoolbook", Century, "Century Gothic",
     serif;
   color: var(--accent);
 }
@@ -980,7 +977,6 @@ h2 {
 .admin-event-item button {
   border: 1px solid rgba(255, 103, 161, 0.36);
   background: rgba(255, 214, 234, 0.72);
-  color: #9a3b72;
   padding: 8px 12px;
   border-radius: 8px;
   cursor: pointer;
