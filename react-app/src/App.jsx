@@ -26,7 +26,7 @@ const COPY = {
     totalHours: "hours",
     totalMinutes: "minutes",
     totalSeconds: "seconds",
-    timelineHeading: "story",
+    timelineHeading: "Our story <3",
     loadingEvents: "Loading events...",
     errorEvents: "Could not load events.",
     closePhoto: "Close photo",
@@ -108,6 +108,63 @@ async function saveEvents(events, adminSecret) {
   return response.json();
 }
 
+async function uploadImageDataUrl(dataUrl, filename, adminSecret) {
+  if (!adminSecret) {
+    throw new Error("Editor secret is missing.");
+  }
+
+  const response = await fetch("/api/upload", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-admin-secret": adminSecret,
+    },
+    body: JSON.stringify({ dataUrl, filename }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => null);
+    throw new Error(error?.error || `Upload failed with ${response.status}`);
+  }
+
+  return response.json();
+}
+
+async function uploadDraftPictures(pictures, adminSecret) {
+  const uploadedPictures = [];
+  let uploadCount = 0;
+
+  for (const picture of pictures || []) {
+    if (!String(picture).startsWith("data:image/")) {
+      uploadedPictures.push(picture);
+      continue;
+    }
+
+    const blob = await uploadImageDataUrl(
+      picture,
+      `event-photo-${Date.now()}-${uploadCount + 1}.jpg`,
+      adminSecret,
+    );
+    uploadedPictures.push(blob.url);
+    uploadCount += 1;
+  }
+
+  return { pictures: uploadedPictures, uploadCount };
+}
+
+async function prepareEventsForBlob(events, adminSecret) {
+  let totalUploads = 0;
+  const preparedEvents = [];
+
+  for (const event of events) {
+    const result = await uploadDraftPictures(event.pictures, adminSecret);
+    totalUploads += result.uploadCount;
+    preparedEvents.push({ ...event, pictures: result.pictures });
+  }
+
+  return { events: preparedEvents, uploadCount: totalUploads };
+}
+
 function compareEventsByTime(a, b) {
   return Date.parse(a.time) - Date.parse(b.time);
 }
@@ -150,19 +207,27 @@ function createRandomSeed() {
 
 function AdminPage() {
   const [authed, setAuthed] = useState(
-    () => localStorage.getItem("adminAuthed") === "true"
+    () => sessionStorage.getItem("adminAuthed") === "true",
   );
   const [adminSecret, setAdminSecret] = useState(
-    () => sessionStorage.getItem("adminSecret") || ""
+    () => sessionStorage.getItem("adminSecret") || "",
   );
   const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [fetchError, setFetchError] = useState("");
-  const [importStatus, setImportStatus] = useState("");
-  const [workStatus, setWorkStatus] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [toast, setToast] = useState(null);
   const importInputRef = useRef(null);
+
+  const notify = (message, type = "info") => {
+    setToast({ id: Date.now(), message, type });
+  };
+
+  useEffect(() => {
+    if (!toast) return undefined;
+    const timeout = window.setTimeout(() => setToast(null), 4200);
+    return () => window.clearTimeout(timeout);
+  }, [toast]);
 
   const downloadJson = () => {
     const blob = new Blob([JSON.stringify(events, null, 2)], {
@@ -176,22 +241,19 @@ function AdminPage() {
     a.click();
     a.remove();
     window.setTimeout(() => URL.revokeObjectURL(url), 0);
+    notify("Downloaded the current preview JSON.");
   };
 
   const loadEventsFromSource = async () => {
     setLoading(true);
-    setFetchError("");
-    setWorkStatus("");
 
     try {
       const data = await fetchEvents();
       setEvents(data);
-      setWorkStatus(
-        `Loaded ${data.length} event${data.length === 1 ? "" : "s"}.`
-      );
+      notify(`Loaded ${data.length} event${data.length === 1 ? "" : "s"}.`);
     } catch {
-      setFetchError("Could not load events.");
       setEvents([]);
+      notify("Could not load events.", "error");
     } finally {
       setLoading(false);
     }
@@ -203,7 +265,6 @@ function AdminPage() {
 
     async function loadEvents() {
       setLoading(true);
-      setFetchError("");
 
       try {
         const data = await fetchEvents();
@@ -212,8 +273,8 @@ function AdminPage() {
         }
       } catch {
         if (!cancelled) {
-          setFetchError("Could not load events.");
           setEvents([]);
+          notify("Could not load events.", "error");
         }
       } finally {
         if (!cancelled) {
@@ -232,9 +293,8 @@ function AdminPage() {
   // Auto-export disabled: manual download/import only
 
   const handleImportFile = async (file) => {
-    setImportStatus("");
     if (!file) {
-      setImportStatus("No file selected.");
+      notify("No file selected.", "error");
       return;
     }
     try {
@@ -245,14 +305,13 @@ function AdminPage() {
       }
       const normalized = normalizeEvents(parsed);
       setEvents(normalized);
-      setImportStatus(
+      notify(
         `Imported ${normalized.length} event${
           normalized.length === 1 ? "" : "s"
-        } into preview. Use "Save preview" to write it to Blob.`
+        } into preview. Save preview to write it to Blob.`,
       );
-      setWorkStatus("");
     } catch (err) {
-      setImportStatus(err.message || "Import failed.");
+      notify(err.message || "Import failed.", "error");
     }
   };
 
@@ -262,14 +321,25 @@ function AdminPage() {
   };
 
   const handleSavePreview = async () => {
-    setWorkStatus("");
+    setSaving(true);
     try {
-      await handleSaveEvents(events);
-      setWorkStatus(
-        `Saved ${events.length} event${events.length === 1 ? "" : "s"} to Blob.`
+      const result = await prepareEventsForBlob(events, adminSecret);
+      await handleSaveEvents(result.events);
+      notify(
+        `Saved ${result.events.length} event${
+          result.events.length === 1 ? "" : "s"
+        } to Blob${
+          result.uploadCount
+            ? ` and uploaded ${result.uploadCount} image${
+                result.uploadCount === 1 ? "" : "s"
+              }`
+            : ""
+        }.`,
       );
     } catch (err) {
-      setWorkStatus(err.message || "Save failed.");
+      notify(err.message || "Save failed.", "error");
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -278,13 +348,12 @@ function AdminPage() {
     const secret = import.meta.env.VITE_ADMIN_PASSWORD || "mtriyeumaihan";
     const apiSecret = import.meta.env.VITE_ADMIN_API_SECRET || password;
     if (password === secret) {
-      localStorage.setItem("adminAuthed", "true");
+      sessionStorage.setItem("adminAuthed", "true");
       sessionStorage.setItem("adminSecret", apiSecret);
       setAdminSecret(apiSecret);
       setAuthed(true);
-      setError("");
     } else {
-      setError("Wrong password.");
+      notify("Wrong password.", "error");
     }
   };
 
@@ -304,9 +373,9 @@ function AdminPage() {
               />
             </label>
             <button type="submit">Enter</button>
-            {error ? <p className="admin-status">{error}</p> : null}
           </form>
         </section>
+        {toast ? <Toast toast={toast} onClose={() => setToast(null)} /> : null}
       </main>
     );
   }
@@ -333,7 +402,7 @@ function AdminPage() {
             type="button"
             className="link-button button-download"
             onClick={downloadJson}
-            disabled={loading}
+            disabled={loading || saving}
           >
             Download JSON
           </button>
@@ -341,7 +410,7 @@ function AdminPage() {
             type="button"
             className="link-button button-import"
             onClick={() => importInputRef.current?.click()}
-            disabled={loading}
+            disabled={loading || saving}
           >
             Import JSON
           </button>
@@ -349,15 +418,15 @@ function AdminPage() {
             type="button"
             className="link-button button-save"
             onClick={handleSavePreview}
-            disabled={loading}
+            disabled={loading || saving}
           >
-            Save preview
+            {saving ? "Saving..." : "Save preview"}
           </button>
           <button
             type="button"
             className="link-button button-cancel"
             onClick={loadEventsFromSource}
-            disabled={loading}
+            disabled={loading || saving}
           >
             Reload from Blob
           </button>
@@ -374,17 +443,24 @@ function AdminPage() {
           }}
         />
       </section>
-      {importStatus ? <p className="timeline-note">{importStatus}</p> : null}
-      {workStatus ? <p className="timeline-note">{workStatus}</p> : null}
-      {fetchError ? <p className="timeline-note">{fetchError}</p> : null}
-      {loading ? <p className="timeline-note">Loading events...</p> : null}
-      <EventAdmin
-        adminSecret={adminSecret}
-        events={events}
-        onSaveEvents={handleSaveEvents}
-        setEvents={setEvents}
-      />
+      <EventAdmin events={events} setEvents={setEvents} notify={notify} />
+      {toast ? <Toast toast={toast} onClose={() => setToast(null)} /> : null}
     </main>
+  );
+}
+
+function Toast({ toast, onClose }) {
+  return (
+    <div
+      className={`toast toast-${toast.type}`}
+      role="status"
+      aria-live="polite"
+    >
+      <span>{toast.message}</span>
+      <button type="button" onClick={onClose} aria-label="Dismiss notification">
+        ×
+      </button>
+    </div>
   );
 }
 
@@ -407,10 +483,10 @@ const ClockSentence = memo(function ClockSentence({
                 visibleUnits.length === 1
                   ? ""
                   : isLast
-                  ? ""
-                  : isSecondLast
-                  ? conjunction || " and "
-                  : ", ";
+                    ? ""
+                    : isSecondLast
+                      ? conjunction || " and "
+                      : ", ";
 
               const prevVal = prevDiffRef.current?.[unit.key] ?? unit.value;
               const currDigits = String(unit.value).split("");
@@ -475,7 +551,7 @@ const Totals = memo(function Totals({ totals, prevTotalsRef, labels }) {
         value: totals.seconds,
       },
     ],
-    [totals, labels]
+    [totals, labels],
   );
 
   return (
@@ -511,7 +587,9 @@ const Totals = memo(function Totals({ totals, prevTotalsRef, labels }) {
 function TimelinePage() {
   const prefersReducedMotion = useReducedMotion();
   const [isMobile, setIsMobile] = useState(() =>
-    typeof window !== "undefined" ? window.matchMedia(MOBILE_QUERY).matches : false
+    typeof window !== "undefined"
+      ? window.matchMedia(MOBILE_QUERY).matches
+      : false,
   );
   const [language, setLanguage] = useState(() => {
     if (typeof window === "undefined") return "en";
@@ -857,7 +935,7 @@ function TimelinePage() {
 
 export default function App() {
   const [path, setPath] = useState(() =>
-    typeof window !== "undefined" ? window.location.pathname : "/"
+    typeof window !== "undefined" ? window.location.pathname : "/",
   );
 
   useEffect(() => {

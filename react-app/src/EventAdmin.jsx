@@ -87,50 +87,6 @@ async function fileToOptimizedDataUrl(file) {
   }
 }
 
-async function uploadImageDataUrl(dataUrl, filename, adminSecret) {
-  if (!adminSecret) {
-    throw new Error("Editor secret is missing.");
-  }
-
-  const response = await fetch("/api/upload", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-admin-secret": adminSecret,
-    },
-    body: JSON.stringify({ dataUrl, filename }),
-  });
-
-  if (!response.ok) {
-    const error = await response.json().catch(() => null);
-    throw new Error(error?.error || `Upload failed with ${response.status}`);
-  }
-
-  return response.json();
-}
-
-async function uploadPendingPictures(pictures, adminSecret) {
-  const uploadedPictures = [];
-  let uploadCount = 0;
-
-  for (const picture of pictures) {
-    if (!String(picture).startsWith("data:image/")) {
-      uploadedPictures.push(picture);
-      continue;
-    }
-
-    const blob = await uploadImageDataUrl(
-      picture,
-      `event-photo-${Date.now()}-${uploadCount + 1}.jpg`,
-      adminSecret
-    );
-    uploadedPictures.push(blob.url);
-    uploadCount += 1;
-  }
-
-  return { pictures: uploadedPictures, uploadCount };
-}
-
 async function fileToOptimizedPicture(file) {
   const dataUrl = await fileToOptimizedDataUrl(file);
   if (!dataUrl) return null;
@@ -169,9 +125,10 @@ function mergePictures(current, next) {
 function PictureEditor({
   picturesInput,
   setPicturesInput,
-  setStatus,
+  notify,
   setBusy,
   busy,
+  onPreview,
   compact = false,
 }) {
   const [dropActive, setDropActive] = useState(false);
@@ -191,7 +148,6 @@ function PictureEditor({
 
   const handleFiles = async (files) => {
     setBusy(true);
-    setStatus("");
     const urls = [];
     try {
       for (const file of files) {
@@ -201,7 +157,7 @@ function PictureEditor({
 
       if (urls.length) {
         addPictures(urls);
-        setStatus(
+        notify(
           `Prepared ${urls.length} image${urls.length === 1 ? "" : "s"} for upload.`
         );
       }
@@ -213,7 +169,6 @@ function PictureEditor({
   const handleDrop = async (event) => {
     event.preventDefault();
     setDropActive(false);
-    setStatus("");
 
     const files = Array.from(event.dataTransfer.files || []);
     if (files.length) {
@@ -279,7 +234,14 @@ function PictureEditor({
         <div className="thumb-grid" aria-live="polite">
           {picturesList.map((src, idx) => (
             <div key={`${idx}-${src.slice(0, 24)}`} className="thumb-item">
-              <img src={src} alt={`pic-${idx + 1}`} loading="lazy" />
+              <button
+                type="button"
+                className="thumb-preview"
+                onClick={() => onPreview(src)}
+                aria-label={`Preview image ${idx + 1}`}
+              >
+                <img src={src} alt={`pic-${idx + 1}`} loading="lazy" />
+              </button>
               <button
                 type="button"
                 className="thumb-remove"
@@ -308,7 +270,7 @@ function PictureEditor({
   );
 }
 
-function EventSummary({ event }) {
+function EventSummary({ event, onPreview }) {
   const pictures = event.pictures || [];
 
   return (
@@ -323,7 +285,15 @@ function EventSummary({ event }) {
       {pictures.length ? (
         <div className="admin-event-thumbs">
           {pictures.slice(0, 5).map((src, idx) => (
-            <img key={`${src.slice(0, 24)}-${idx}`} src={src} alt="" />
+            <button
+              key={`${src.slice(0, 24)}-${idx}`}
+              type="button"
+              className="admin-thumb-preview"
+              onClick={() => onPreview(src)}
+              aria-label={`Preview ${event.name} image ${idx + 1}`}
+            >
+              <img src={src} alt="" />
+            </button>
           ))}
           {pictures.length > 5 ? <span>+{pictures.length - 5}</span> : null}
         </div>
@@ -338,7 +308,8 @@ function InlineEventEditor({
   event,
   busy,
   setBusy,
-  setStatus,
+  notify,
+  onPreview,
   onCancel,
   onDelete,
   onSave,
@@ -356,10 +327,9 @@ function InlineEventEditor({
 
   const handleSubmit = (submitEvent) => {
     submitEvent.preventDefault();
-    setStatus("");
 
     if (!name || !time) {
-      setStatus("Name and time are required.");
+      notify("Name and time are required.", "error");
       return;
     }
 
@@ -407,9 +377,10 @@ function InlineEventEditor({
         <PictureEditor
           picturesInput={picturesInput}
           setPicturesInput={setPicturesInput}
-          setStatus={setStatus}
+          notify={notify}
           setBusy={setBusy}
           busy={busy}
+          onPreview={onPreview}
           compact
         />
       </label>
@@ -438,19 +409,14 @@ function InlineEventEditor({
   );
 }
 
-export default function EventAdmin({
-  adminSecret,
-  events,
-  onSaveEvents,
-  setEvents,
-}) {
+export default function EventAdmin({ events, setEvents, notify = () => {} }) {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [time, setTime] = useState("");
   const [picturesInput, setPicturesInput] = useState("");
   const [editingId, setEditingId] = useState(null);
-  const [status, setStatus] = useState("");
   const [busy, setBusy] = useState(false);
+  const [previewImage, setPreviewImage] = useState(null);
 
   const picturesList = useMemo(
     () => parsePictures(picturesInput),
@@ -469,119 +435,55 @@ export default function EventAdmin({
     setPicturesInput("");
   };
 
-  const commitEvents = async (nextEvents, successMessage) => {
-    setBusy(true);
-    try {
-      if (onSaveEvents) {
-        await onSaveEvents(nextEvents);
-      } else {
-        setEvents(nextEvents);
-      }
-      setStatus(successMessage);
-    } catch (error) {
-      setEvents(nextEvents);
-      setStatus(
-        `${successMessage} Browser preview updated, but Blob save failed: ${error.message}`
-      );
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const preparePicturesForSave = async (pictures) => {
-    const result = await uploadPendingPictures(pictures, adminSecret);
-    return {
-      ...result,
-      uploadNote: result.uploadCount
-        ? ` Uploaded ${result.uploadCount} image${
-            result.uploadCount === 1 ? "" : "s"
-          } to Blob.`
-        : "",
-    };
-  };
-
   const handleAdd = async (event) => {
     event.preventDefault();
-    setStatus("");
 
     if (!name || !time) {
-      setStatus("Name and time are required.");
+      notify("Name and time are required.", "error");
       return;
     }
-
-    setBusy(true);
-    let uploadedPictures;
-    let uploadNote = "";
-    try {
-      const result = await preparePicturesForSave(picturesList);
-      uploadedPictures = result.pictures;
-      uploadNote = result.uploadNote;
-    } catch (error) {
-      setStatus(`Image upload failed: ${error.message}`);
-      setBusy(false);
-      return;
-    }
-    setBusy(false);
 
     const nextEvent = {
       id: createEventId(),
       name,
       description,
       time: normalizeDate(time),
-      pictures: uploadedPictures,
+      pictures: picturesList,
     };
 
-    const nextEvents = [...events, nextEvent];
+    setEvents([...events, nextEvent]);
     resetAddForm();
-    await commitEvents(
-      nextEvents,
-      `Added event and saved to Blob.${uploadNote}`
-    );
+    notify("Added event to preview. Save preview to write it to Blob.");
   };
 
-  const handleSave = async (nextEvent) => {
-    setBusy(true);
-    let uploadedPictures;
-    let uploadNote = "";
-    try {
-      const result = await preparePicturesForSave(nextEvent.pictures || []);
-      uploadedPictures = result.pictures;
-      uploadNote = result.uploadNote;
-    } catch (error) {
-      setStatus(`Image upload failed: ${error.message}`);
-      setBusy(false);
-      return;
-    }
-    setBusy(false);
-
+  const handleSave = (nextEvent) => {
     const nextEvents = events.map((event) =>
       eventKey(event) === editingId
-        ? { ...nextEvent, id: editingId, pictures: uploadedPictures }
+        ? { ...nextEvent, id: editingId }
         : event
     );
     setEditingId(null);
-    await commitEvents(
-      nextEvents,
-      `Updated event and saved to Blob.${uploadNote}`
-    );
+    setEvents(nextEvents);
+    notify("Updated event in preview. Save preview to write it to Blob.");
   };
 
-  const handleDelete = async (id) => {
+  const handleDelete = (id) => {
     const confirmed = window.confirm(
-      "Delete this event? This cannot be undone after saving."
+      "Delete this event from the preview? Save preview to write this change to Blob."
     );
     if (!confirmed) return;
 
     const nextEvents = events.filter((event) => eventKey(event) !== id);
     if (editingId === id) setEditingId(null);
-    await commitEvents(nextEvents, "Deleted event and saved to Blob.");
+    setEvents(nextEvents);
+    notify("Deleted event from preview. Save preview to write it to Blob.");
   };
 
   return (
     <section className="admin-panel" aria-label="Manage events">
       <div className="admin-header">
         <h3>Manage events</h3>
-        <p className="admin-hint">Changes save to your connected event data.</p>
+        <p className="admin-hint">Edits stay as preview until you save them.</p>
       </div>
 
       <form className="admin-form" onSubmit={handleAdd}>
@@ -619,15 +521,15 @@ export default function EventAdmin({
           <PictureEditor
             picturesInput={picturesInput}
             setPicturesInput={setPicturesInput}
-            setStatus={setStatus}
+            notify={notify}
             setBusy={setBusy}
             busy={busy}
+            onPreview={setPreviewImage}
           />
         </label>
         <button type="submit" className="button-save" disabled={busy}>
-          {busy ? "Saving..." : "Add event"}
+          {busy ? "Preparing..." : "Add event"}
         </button>
-        {status ? <p className="admin-status">{status}</p> : null}
       </form>
 
       <div className="admin-list">
@@ -650,21 +552,21 @@ export default function EventAdmin({
                     event={event}
                     busy={busy}
                     setBusy={setBusy}
-                    setStatus={setStatus}
+                    notify={notify}
+                    onPreview={setPreviewImage}
                     onCancel={() => setEditingId(null)}
                     onDelete={() => handleDelete(id)}
                     onSave={handleSave}
                   />
                 ) : (
                   <>
-                    <EventSummary event={event} />
+                    <EventSummary event={event} onPreview={setPreviewImage} />
                     <div className="admin-event-actions">
                       <button
                         type="button"
                         className="button-edit"
                         onClick={() => {
                           setEditingId(id);
-                          setStatus("");
                         }}
                         disabled={busy}
                       >
@@ -686,6 +588,27 @@ export default function EventAdmin({
           })}
         </ul>
       </div>
+      {previewImage ? (
+        <div
+          className="photo-modal-backdrop"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Preview image"
+          onClick={() => setPreviewImage(null)}
+        >
+          <div className="photo-modal" onClick={(event) => event.stopPropagation()}>
+            <button
+              type="button"
+              className="photo-modal-close"
+              onClick={() => setPreviewImage(null)}
+              aria-label="Close preview"
+            >
+              ×
+            </button>
+            <img src={previewImage} alt="" />
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }

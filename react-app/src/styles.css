@@ -684,6 +684,64 @@ h2 {
   gap: 8px;
 }
 
+.toast {
+  position: fixed;
+  right: clamp(14px, 4vw, 28px);
+  bottom: clamp(14px, 4vw, 28px);
+  z-index: 1400;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: min(420px, calc(100vw - 28px));
+  padding: 12px 14px;
+  border: 1px solid rgba(255, 103, 161, 0.38);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--text);
+  box-shadow: 0 14px 34px rgba(80, 26, 57, 0.22);
+  text-align: left;
+  backdrop-filter: blur(8px);
+  animation: toastIn 180ms ease-out;
+}
+
+.toast-error {
+  border-color: rgba(217, 83, 106, 0.55);
+  background: rgba(255, 241, 245, 0.95);
+}
+
+.toast span {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  line-height: 1.35;
+}
+
+.toast button {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid rgba(255, 103, 161, 0.3);
+  border-radius: 8px;
+  background: rgba(255, 156, 201, 0.18);
+  color: var(--accent);
+  cursor: pointer;
+  font: inherit;
+  line-height: 1;
+}
+
+@keyframes toastIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
 .admin-header {
   display: flex;
   justify-content: space-between;
@@ -794,7 +852,17 @@ h2 {
   background: rgba(255, 255, 255, 0.8);
 }
 
-.thumb-item img {
+.thumb-preview {
+  display: block;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: zoom-in;
+}
+
+.thumb-preview img {
   width: 100%;
   height: 100%;
   object-fit: cover;
@@ -931,7 +999,15 @@ h2 {
   gap: 6px;
 }
 
-.admin-event-thumbs img {
+.admin-thumb-preview {
+  width: 72px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: zoom-in;
+}
+
+.admin-thumb-preview img {
   width: 72px;
   aspect-ratio: 4 / 3;
   object-fit: cover;
@@ -1016,6 +1092,13 @@ h2 {
   padding: 8px 12px;
   border-radius: 8px;
   cursor: pointer;
+}
+
+.admin-event-item .admin-thumb-preview {
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
 }
 
 button.button-save {
