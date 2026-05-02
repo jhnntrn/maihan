@@ -366,10 +366,10 @@ function InlineEventEditor({
       </div>
       <label>
         Description
-        <textarea
+        <input
+          type="text"
           value={description}
           onChange={(event) => setDescription(event.target.value)}
-          rows={2}
         />
       </label>
       <label>
@@ -409,7 +409,86 @@ function InlineEventEditor({
   );
 }
 
-export default function EventAdmin({ events, setEvents, notify = () => {} }) {
+function LoveNotesEditor({ loveNotes, setLoveNotes, notify = () => {} }) {
+  const normalizedNotes = Array.isArray(loveNotes) ? loveNotes : [];
+
+  const updateNote = (index, value) => {
+    setLoveNotes(
+      normalizedNotes.map((note, noteIndex) =>
+        noteIndex === index ? value : note
+      )
+    );
+  };
+
+  const addNote = () => {
+    setLoveNotes([...normalizedNotes, ""]);
+    notify("Added love note to preview. Save preview to write it to Blob.");
+  };
+
+  const deleteNote = (index) => {
+    const confirmed = window.confirm(
+      "Delete this love note from the preview? Save preview to write this change to Blob."
+    );
+    if (!confirmed) return;
+
+    setLoveNotes(normalizedNotes.filter((_, noteIndex) => noteIndex !== index));
+    notify("Deleted love note from preview. Save preview to write it to Blob.");
+  };
+
+  const cleanNotes = () => {
+    const nextNotes = normalizedNotes
+      .map((note) => note.trim())
+      .filter(Boolean);
+    setLoveNotes(nextNotes);
+    notify(`Cleaned love notes. ${nextNotes.length} note${nextNotes.length === 1 ? "" : "s"} remain.`);
+  };
+
+  return (
+    <section className="admin-panel love-notes-panel" aria-label="Manage love notes">
+      <div className="love-notes-toolbar">
+        <button type="button" className="button-save" onClick={addNote}>
+          Add note
+        </button>
+        <button type="button" className="button-cancel" onClick={cleanNotes}>
+          Clean empty notes
+        </button>
+      </div>
+
+      <ul className="love-notes-list">
+        {normalizedNotes.map((note, index) => (
+          <li key={`love-note-${index}`} className="love-note-item">
+            <span className="love-note-index">{index + 1}</span>
+            <input
+              type="text"
+              value={note}
+              onChange={(event) => updateNote(index, event.target.value)}
+              aria-label={`Love note ${index + 1}`}
+            />
+            <button
+              type="button"
+              className="button-danger"
+              onClick={() => deleteNote(index)}
+            >
+              Delete
+            </button>
+          </li>
+        ))}
+      </ul>
+
+      {!normalizedNotes.length ? (
+        <p className="admin-hint">No love notes yet. Add one above.</p>
+      ) : null}
+    </section>
+  );
+}
+
+export default function EventAdmin({
+  events,
+  setEvents,
+  loveNotes = [],
+  setLoveNotes = () => {},
+  notify = () => {},
+}) {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [time, setTime] = useState("");
@@ -480,57 +559,75 @@ export default function EventAdmin({ events, setEvents, notify = () => {} }) {
   };
 
   return (
-    <section className="admin-panel" aria-label="Manage events">
-      <div className="admin-header">
-        <h3>Manage events</h3>
-        <p className="admin-hint">Edits stay as preview until you save them.</p>
-      </div>
+    <div className="admin-accordion">
+      <details className="admin-accordion-item" open>
+        <summary>
+          <span>
+            <strong>Love notes</strong>
+            <small>Rotating notes shown on the main page.</small>
+          </span>
+        </summary>
+        <LoveNotesEditor
+          loveNotes={loveNotes}
+          setLoveNotes={setLoveNotes}
+          notify={notify}
+        />
+      </details>
 
-      <form className="admin-form" onSubmit={handleAdd}>
-        <div className="admin-edit-state">
-          <strong>New event</strong>
-        </div>
-        <label>
-          Name
-          <input
-            type="text"
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            required
-          />
-        </label>
-        <label>
-          Description
-          <textarea
-            value={description}
-            onChange={(event) => setDescription(event.target.value)}
-            rows={2}
-          />
-        </label>
-        <label>
-          Date
-          <input
-            type="date"
-            value={time}
-            onChange={(event) => setTime(event.target.value)}
-            required
-          />
-        </label>
-        <label>
-          Pictures
-          <PictureEditor
-            picturesInput={picturesInput}
-            setPicturesInput={setPicturesInput}
-            notify={notify}
-            setBusy={setBusy}
-            busy={busy}
-            onPreview={setPreviewImage}
-          />
-        </label>
-        <button type="submit" className="button-save" disabled={busy}>
-          {busy ? "Preparing..." : "Add event"}
-        </button>
-      </form>
+      <details className="admin-accordion-item" open>
+        <summary>
+          <span>
+            <strong>Manage events</strong>
+            <small>Edits stay as preview until you save them.</small>
+          </span>
+        </summary>
+        <section className="admin-panel events-panel" aria-label="Manage events">
+
+        <form className="admin-form" onSubmit={handleAdd}>
+          <div className="admin-edit-state">
+            <strong>New event</strong>
+          </div>
+          <label>
+            Name
+            <input
+              type="text"
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              required
+            />
+          </label>
+          <label>
+            Description
+            <input
+              type="text"
+              value={description}
+              onChange={(event) => setDescription(event.target.value)}
+            />
+          </label>
+          <label>
+            Date
+            <input
+              type="date"
+              value={time}
+              onChange={(event) => setTime(event.target.value)}
+              required
+            />
+          </label>
+          <label>
+            Pictures
+            <PictureEditor
+              picturesInput={picturesInput}
+              setPicturesInput={setPicturesInput}
+              notify={notify}
+              setBusy={setBusy}
+              busy={busy}
+              onPreview={setPreviewImage}
+            />
+          </label>
+          <button type="submit" className="button-save" disabled={busy}>
+            {busy ? "Preparing..." : "Add event"}
+          </button>
+        </form>
 
       <div className="admin-list">
         <h4>Existing events</h4>
@@ -609,6 +706,8 @@ export default function EventAdmin({ events, setEvents, notify = () => {} }) {
           </div>
         </div>
       ) : null}
-    </section>
+      </section>
+      </details>
+    </div>
   );
 }

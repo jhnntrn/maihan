@@ -3,11 +3,13 @@ import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { BASE_DATE, diffParts } from "../../shared/dateDiff";
 import eventsUrl from "../../shared/events.json?url";
 import EventAdmin from "./EventAdmin";
-import loveNotes from "../../shared/loveNotes.json";
+import defaultLoveNotes from "../../shared/loveNotes.json";
+import loveNotesUrl from "../../shared/loveNotes.json?url";
 import Event from "./Event";
 
 const MOBILE_QUERY = "(max-width: 768px)";
 const EVENTS_API_URL = "/api/events";
+const LOVE_NOTES_API_URL = "/api/love-notes";
 
 const COPY = {
   en: {
@@ -100,6 +102,16 @@ async function fetchEvents() {
   }
 }
 
+async function fetchLoveNotes() {
+  try {
+    const data = await fetchJson(LOVE_NOTES_API_URL);
+    return Array.isArray(data) ? data.filter((note) => typeof note === "string") : [];
+  } catch {
+    const data = await fetchJson(loveNotesUrl);
+    return Array.isArray(data) ? data.filter((note) => typeof note === "string") : [];
+  }
+}
+
 async function saveEvents(events, adminSecret) {
   const response = await fetch(EVENTS_API_URL, {
     method: "PUT",
@@ -108,6 +120,24 @@ async function saveEvents(events, adminSecret) {
       "x-admin-secret": adminSecret,
     },
     body: JSON.stringify(events),
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => null);
+    throw new Error(error?.error || `Save failed with ${response.status}`);
+  }
+
+  return response.json();
+}
+
+async function saveLoveNotes(notes, adminSecret) {
+  const response = await fetch(LOVE_NOTES_API_URL, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      "x-admin-secret": adminSecret,
+    },
+    body: JSON.stringify(notes),
   });
 
   if (!response.ok) {
@@ -215,6 +245,14 @@ function createRandomSeed() {
   return Math.floor(Math.random() * 2147483647) || Date.now();
 }
 
+function seededRandom(seed) {
+  let value = seed % 2147483647 || 1;
+  return () => {
+    value = (value * 48271) % 2147483647;
+    return value / 2147483647;
+  };
+}
+
 function cssEscape(value) {
   const stringValue = String(value);
   if (typeof CSS !== "undefined" && CSS.escape) {
@@ -252,6 +290,7 @@ function AdminPage() {
   );
   const [password, setPassword] = useState("");
   const [events, setEvents] = useState([]);
+  const [loveNotes, setLoveNotes] = useState(defaultLoveNotes);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState(null);
@@ -268,13 +307,13 @@ function AdminPage() {
   }, [toast]);
 
   const downloadJson = () => {
-    const blob = new Blob([JSON.stringify(events, null, 2)], {
+    const blob = new Blob([JSON.stringify({ events, loveNotes }, null, 2)], {
       type: "application/json",
     });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = "events.json";
+    a.download = "memory-data.json";
     document.body.append(a);
     a.click();
     a.remove();
@@ -286,9 +325,17 @@ function AdminPage() {
     setLoading(true);
 
     try {
-      const data = await fetchEvents();
-      setEvents(data);
-      notify(`Loaded ${data.length} event${data.length === 1 ? "" : "s"}.`);
+      const [eventData, noteData] = await Promise.all([
+        fetchEvents(),
+        fetchLoveNotes(),
+      ]);
+      setEvents(eventData);
+      setLoveNotes(noteData);
+      notify(
+        `Loaded ${eventData.length} event${
+          eventData.length === 1 ? "" : "s"
+        } and ${noteData.length} love note${noteData.length === 1 ? "" : "s"}.`,
+      );
     } catch {
       setEvents([]);
       notify("Could not load events.", "error");
@@ -305,9 +352,10 @@ function AdminPage() {
       setLoading(true);
 
       try {
-        const data = await fetchEvents();
+        const [data, notes] = await Promise.all([fetchEvents(), fetchLoveNotes()]);
         if (!cancelled) {
           setEvents(data);
+          setLoveNotes(notes);
         }
       } catch {
         if (!cancelled) {
@@ -338,11 +386,17 @@ function AdminPage() {
     try {
       const text = await file.text();
       const parsed = JSON.parse(text);
-      if (!Array.isArray(parsed)) {
-        throw new Error("File must contain a JSON array of events.");
+      const importedEvents = Array.isArray(parsed) ? parsed : parsed.events;
+      const importedNotes = Array.isArray(parsed?.loveNotes) ? parsed.loveNotes : null;
+
+      if (!Array.isArray(importedEvents)) {
+        throw new Error("File must contain an events array.");
       }
-      const normalized = normalizeEvents(parsed);
+      const normalized = normalizeEvents(importedEvents);
       setEvents(normalized);
+      if (importedNotes) {
+        setLoveNotes(importedNotes.filter((note) => typeof note === "string"));
+      }
       notify(
         `Imported ${normalized.length} event${
           normalized.length === 1 ? "" : "s"
@@ -363,9 +417,12 @@ function AdminPage() {
     try {
       const result = await prepareEventsForBlob(events, adminSecret);
       await handleSaveEvents(result.events);
+      await saveLoveNotes(loveNotes, adminSecret);
       notify(
         `Saved ${result.events.length} event${
           result.events.length === 1 ? "" : "s"
+        } and ${loveNotes.length} love note${
+          loveNotes.length === 1 ? "" : "s"
         } to Blob${
           result.uploadCount
             ? ` and uploaded ${result.uploadCount} image${
@@ -422,7 +479,7 @@ function AdminPage() {
     <main className="app">
       <header>
         <h1>Event Studio</h1>
-        <p className="sub">Manage timeline events and pictures.</p>
+        <p className="sub">Manage timeline events, love notes, and pictures.</p>
         <a href="/" className="timeline-note">
           ← Back to timeline
         </a>
@@ -458,7 +515,7 @@ function AdminPage() {
             onClick={handleSavePreview}
             disabled={loading || saving}
           >
-            {saving ? "Saving..." : "Save preview"}
+            {saving ? "Saving..." : "Save all changes"}
           </button>
           <button
             type="button"
@@ -481,7 +538,13 @@ function AdminPage() {
           }}
         />
       </section>
-      <EventAdmin events={events} setEvents={setEvents} notify={notify} />
+      <EventAdmin
+        events={events}
+        setEvents={setEvents}
+        loveNotes={loveNotes}
+        setLoveNotes={setLoveNotes}
+        notify={notify}
+      />
       {toast ? <Toast toast={toast} onClose={() => setToast(null)} /> : null}
     </main>
   );
@@ -622,16 +685,6 @@ const Totals = memo(function Totals({ totals, prevTotalsRef, labels }) {
   );
 });
 
-function VisualBackdrop() {
-  return (
-    <div className="parallax-memory-bg" aria-hidden="true">
-      {Array.from({ length: 7 }, (_, index) => (
-        <span key={index} className={`parallax-frame frame-${index + 1}`} />
-      ))}
-    </div>
-  );
-}
-
 function StoryProgressRail({ items, activeKey, visible, label, onSelect }) {
   if (!items.length) return null;
   const activeIndex = Math.max(
@@ -676,11 +729,116 @@ function StoryProgressRail({ items, activeKey, visible, label, onSelect }) {
   );
 }
 
-function MemoryModeOverlay({ photos, index, setIndex, labels, onClose }) {
+function MemoryIntroStack({ photos, visible }) {
+  if (!visible || !photos.length) return null;
+  const messyPile = [
+    { x: -34, y: 20, rotate: -17, scale: 0.94 },
+    { x: 26, y: -14, rotate: 13, scale: 1.03 },
+    { x: -10, y: 8, rotate: 4, scale: 0.99 },
+    { x: 46, y: 24, rotate: 21, scale: 0.9 },
+    { x: -48, y: -20, rotate: -28, scale: 0.86 },
+    { x: 8, y: -34, rotate: -8, scale: 0.96 },
+    { x: -24, y: 38, rotate: 24, scale: 0.88 },
+    { x: 52, y: -30, rotate: -19, scale: 0.84 },
+    { x: 2, y: 18, rotate: 9, scale: 1.06 },
+  ];
+
+  return (
+    <motion.div
+      className="memory-intro"
+      aria-hidden="true"
+      initial={{ opacity: 1 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0, scale: 0.98 }}
+      transition={{ duration: 0.42, ease: "easeOut" }}
+    >
+      <div className="memory-intro-stack">
+        {photos.map((photo, index) => {
+          const landing = messyPile[index % messyPile.length];
+          const entryX = landing.x * -0.7;
+
+          return (
+            <motion.img
+              key={`${photo.id}-intro`}
+              src={photo.src}
+              alt=""
+              draggable="false"
+              initial={{
+                opacity: 0,
+                y: "-62vh",
+                x: entryX,
+                rotate: landing.rotate - 34,
+                scale: landing.scale * 0.78,
+              }}
+              animate={{
+                opacity: 1,
+                y: landing.y,
+                x: landing.x,
+                rotate: landing.rotate,
+                scale: landing.scale,
+              }}
+              transition={{
+                delay: index * 0.1,
+                duration: 0.78,
+                ease: [0.18, 0.9, 0.26, 1.08],
+              }}
+              style={{ zIndex: index + 1 }}
+            />
+          );
+        })}
+      </div>
+    </motion.div>
+  );
+}
+
+function shuffleWithSeed(items, seed) {
+  const rand = seededRandom(seed);
+  return [...items]
+    .map((item) => ({ item, order: rand() }))
+    .sort((a, b) => a.order - b.order)
+    .map(({ item }) => item);
+}
+
+function MemoryModeOverlay({ photos, labels, locale, onClose }) {
+  const [deck, setDeck] = useState(() => shuffleWithSeed(photos, createRandomSeed()));
+  const [current, setCurrent] = useState(null);
+
+  useEffect(() => {
+    setDeck(shuffleWithSeed(photos, createRandomSeed()));
+    setCurrent(null);
+  }, [photos]);
+
   if (!photos.length) return null;
-  const current = photos[index % photos.length];
-  const move = (direction) =>
-    setIndex((value) => (value + direction + photos.length) % photos.length);
+
+  const pullNext = () => {
+    if (!deck.length) return;
+    const [next, ...rest] = deck;
+    setCurrent({
+      ...next,
+      memoryRotate: Math.round((Math.random() * 16 - 8) * 10) / 10,
+    });
+    setDeck(rest);
+  };
+
+  const visibleStack = deck.slice(0, 8);
+  const remainingCount = deck.length;
+  const messyDeck = [
+    { x: -42, y: 28, rotate: -24, scale: 0.9 },
+    { x: 26, y: -18, rotate: 17, scale: 0.98 },
+    { x: -12, y: -34, rotate: -7, scale: 0.93 },
+    { x: 48, y: 34, rotate: 29, scale: 0.86 },
+    { x: -56, y: -8, rotate: 12, scale: 0.84 },
+    { x: 4, y: 22, rotate: -31, scale: 0.95 },
+    { x: 38, y: -44, rotate: -15, scale: 0.8 },
+    { x: -30, y: 50, rotate: 21, scale: 0.82 },
+  ];
+  const eventDate = current?.eventTime
+    ? new Date(current.eventTime).toLocaleDateString(locale, {
+        day: "numeric",
+        month: "long",
+        year: "numeric",
+      })
+    : "";
 
   return (
     <motion.div
@@ -700,23 +858,97 @@ function MemoryModeOverlay({ photos, index, setIndex, labels, onClose }) {
       >
         ×
       </button>
-      <button type="button" className="memory-mode-nav prev" onClick={() => move(-1)}>
-        ‹
-      </button>
-      <motion.figure
-        key={current.id}
-        className="memory-mode-frame"
-        initial={{ opacity: 0, scale: 0.96, y: 14 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={{ opacity: 0, scale: 0.96, y: -14 }}
-        transition={{ duration: 0.24, ease: "easeOut" }}
-      >
-        <img src={current.src} alt="" />
-        <figcaption>{current.eventName}</figcaption>
-      </motion.figure>
-      <button type="button" className="memory-mode-nav next" onClick={() => move(1)}>
-        ›
-      </button>
+      <section className="memory-mode-stage">
+        <div className="memory-mode-pile">
+          <div className="memory-mode-deck" aria-hidden="true">
+            {visibleStack.map((photo, index) => {
+              const landing = messyDeck[index % messyDeck.length];
+              return (
+                <motion.img
+                  key={`deck-${photo.id}`}
+                  src={photo.src}
+                  alt=""
+                  initial={false}
+                  animate={landing}
+                  transition={{ duration: 0.24, ease: "easeOut" }}
+                  style={{ zIndex: visibleStack.length - index }}
+                />
+              );
+            })}
+          </div>
+          <span className="memory-mode-count">{remainingCount} left</span>
+        </div>
+
+        <div className="memory-mode-focus">
+          <AnimatePresence mode="wait">
+            {current ? (
+              <motion.figure
+                key={current.id}
+                className="memory-mode-current"
+                initial={{ opacity: 0, y: -80, x: -120, rotate: 18, scale: 0.82 }}
+                animate={{
+                  opacity: 1,
+                  y: 0,
+                  x: 0,
+                  rotate: current.memoryRotate ?? -2,
+                  scale: 1,
+                }}
+                exit={{ opacity: 0, y: 70, x: 90, rotate: -12, scale: 0.86 }}
+                transition={{ duration: 0.34, ease: "easeOut" }}
+              >
+                <img src={current.src} alt="" />
+              </motion.figure>
+            ) : (
+              <motion.div
+                key="empty"
+                className="memory-mode-placeholder"
+                initial={{ opacity: 0, scale: 0.96 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.96 }}
+              >
+                {remainingCount
+                  ? "Pull a memory"
+                  : "You reached the end of the stack"}
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+
+        <aside className="memory-mode-side">
+          <button
+            type="button"
+            className="memory-mode-pull"
+            onClick={pullNext}
+            disabled={!remainingCount}
+          >
+            {remainingCount ? `Pull next (${remainingCount})` : "No more photos"}
+          </button>
+          <AnimatePresence mode="wait">
+            {current ? (
+              <motion.div
+                key={current.id}
+                className="memory-mode-info"
+                initial={{ opacity: 0, x: 14 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 14 }}
+              >
+                <strong>{current.eventName}</strong>
+                {eventDate ? <span>{eventDate}</span> : null}
+              </motion.div>
+            ) : (
+              <motion.div
+                key="empty-info"
+                className="memory-mode-info is-empty"
+                initial={{ opacity: 0, x: 14 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 14 }}
+              >
+                Pull a photo to see its memory info.
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </aside>
+      </section>
     </motion.div>
   );
 }
@@ -733,9 +965,11 @@ function TimelinePage() {
     return localStorage.getItem("lang") || "vi";
   });
   const randomSeed = useMemo(() => createRandomSeed(), []);
+  const introSeed = useMemo(() => createRandomSeed(), []);
   const [now, setNow] = useState(() => new Date());
   const [noteIndex, setNoteIndex] = useState(0);
   const [events, setEvents] = useState([]);
+  const [loveNotes, setLoveNotes] = useState(defaultLoveNotes);
   const [loadingEvents, setLoadingEvents] = useState(true);
   const [eventsError, setEventsError] = useState("");
   const [typedNote, setTypedNote] = useState("");
@@ -743,9 +977,9 @@ function TimelinePage() {
   const [activeWallPhoto, setActiveWallPhoto] = useState(null);
   const [memoryOpen, setMemoryOpen] = useState(false);
   const [memoryModeOpen, setMemoryModeOpen] = useState(false);
-  const [memoryModeIndex, setMemoryModeIndex] = useState(0);
   const [storyProgressVisible, setStoryProgressVisible] = useState(false);
   const [activeProgressKey, setActiveProgressKey] = useState("");
+  const [introVisible, setIntroVisible] = useState(false);
 
   const storyRef = useRef(null);
   const prevDiffRef = useRef(null);
@@ -787,9 +1021,10 @@ function TimelinePage() {
 
     async function loadEvents() {
       try {
-        const data = await fetchEvents();
+        const [data, notes] = await Promise.all([fetchEvents(), fetchLoveNotes()]);
         if (!cancelled) {
           setEvents(data);
+          setLoveNotes(notes);
         }
       } catch {
         if (!cancelled) {
@@ -928,7 +1163,7 @@ function TimelinePage() {
       cancelled = true;
       if (timeoutId) clearTimeout(timeoutId);
     };
-  }, [noteIndex]);
+  }, [loveNotes, noteIndex]);
 
   const enrichedEvents = useMemo(() => {
     const sorted = [...events].sort(compareEventsByTime);
@@ -1061,6 +1296,18 @@ function TimelinePage() {
     [enrichedEvents],
   );
 
+  const introPhotos = useMemo(
+    () => {
+      const rand = seededRandom(introSeed);
+      return [...photoWallItems]
+        .map((photo) => ({ photo, order: rand() }))
+        .sort((a, b) => a.order - b.order)
+        .slice(0, 9)
+        .map(({ photo }) => photo);
+    },
+    [introSeed, photoWallItems],
+  );
+
   const memoryMatches = useMemo(() => {
     const month = now.getMonth();
     const day = now.getDate();
@@ -1138,6 +1385,17 @@ function TimelinePage() {
     };
   }, [storyProgressItems, storyProgressVisible]);
 
+  useEffect(() => {
+    if (prefersReducedMotion || !introPhotos.length) {
+      setIntroVisible(false);
+      return undefined;
+    }
+
+    setIntroVisible(true);
+    const timeout = window.setTimeout(() => setIntroVisible(false), 2800);
+    return () => window.clearTimeout(timeout);
+  }, [introPhotos.length, prefersReducedMotion]);
+
   const reduceMotion = prefersReducedMotion;
 
   const scrollToMemoryEvent = (memory) => {
@@ -1148,7 +1406,11 @@ function TimelinePage() {
 
   return (
     <main className="app">
-      <VisualBackdrop />
+      <AnimatePresence>
+        {introVisible ? (
+          <MemoryIntroStack photos={introPhotos} visible={introVisible} />
+        ) : null}
+      </AnimatePresence>
       <StoryProgressRail
         items={storyProgressItems}
         activeKey={activeProgressKey}
@@ -1195,10 +1457,7 @@ function TimelinePage() {
       <button
         type="button"
         className="memory-mode-button"
-        onClick={() => {
-          setMemoryModeIndex(0);
-          setMemoryModeOpen(true);
-        }}
+        onClick={() => setMemoryModeOpen(true)}
         disabled={!photoWallItems.length}
       >
         {t.memoryMode}
@@ -1311,9 +1570,8 @@ function TimelinePage() {
         {memoryModeOpen ? (
           <MemoryModeOverlay
             photos={photoWallItems}
-            index={memoryModeIndex}
-            setIndex={setMemoryModeIndex}
             labels={t}
+            locale={locale}
             onClose={() => setMemoryModeOpen(false)}
           />
         ) : null}
