@@ -700,6 +700,14 @@ function StoryProgressRail({ items, activeKey, visible, label, onSelect }) {
     0,
     items.findIndex((item) => item.key === activeKey),
   );
+  const visibleItems = items
+    .map((item, index) => ({ ...item, originalIndex: index }))
+    .filter((item) => {
+      const distance = Math.abs(item.originalIndex - activeIndex);
+      if (item.type === "year") return distance <= 22;
+      if (item.type === "month") return distance <= 10;
+      return distance <= 5;
+    });
 
   return (
     <nav
@@ -707,8 +715,8 @@ function StoryProgressRail({ items, activeKey, visible, label, onSelect }) {
       aria-label={label}
     >
       <div className="story-progress-line" aria-hidden="true" />
-      {items.map((item, index) => {
-        const distance = index - activeIndex;
+      {visibleItems.map((item) => {
+        const distance = item.originalIndex - activeIndex;
         const distanceClass =
           Math.abs(distance) > 14
             ? "is-distant"
