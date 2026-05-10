@@ -103,6 +103,72 @@ main.app {
   height: clamp(140px, 18vh, 220px);
 }
 
+.loading-experience {
+  position: fixed;
+  inset: 0;
+  z-index: 1300;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background:
+    radial-gradient(
+      circle at 52% 45%,
+      rgba(255, 168, 211, 0.34),
+      transparent 40%
+    ),
+    linear-gradient(135deg, rgba(60, 15, 49, 1), rgba(255, 103, 161, 1));
+  color: #fff;
+  pointer-events: none;
+}
+
+.loading-name-block {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: baseline;
+  column-gap: clamp(12px, 2.4vw, 34px);
+  row-gap: 0;
+  text-align: center;
+  filter: drop-shadow(0 18px 28px rgba(58, 12, 45, 0.35));
+}
+
+.loading-name-block span {
+  position: relative;
+  display: inline-block;
+  color: rgba(255, 255, 255, 0.06);
+  font-family: "Homemade Apple", "SFU Century Schoolbook", cursive;
+  font-size: clamp(32px, 7.5vw, 104px);
+  font-weight: 400;
+  line-height: 1.2;
+  letter-spacing: 0;
+  white-space: nowrap;
+  -webkit-text-stroke: 1px rgba(255, 255, 255, 0.72);
+}
+
+.loading-name-block span::after {
+  content: attr(data-text);
+  position: absolute;
+  inset: 0;
+  color: #fff;
+  overflow: hidden;
+  clip-path: inset(0 100% 0 0);
+  animation: letterFill 1.5s ease-in-out forwards;
+  -webkit-text-stroke: 0;
+}
+
+.loading-name-block span:nth-child(2)::after {
+  animation-delay: 3.5s;
+}
+
+@keyframes letterFill {
+  from {
+    clip-path: inset(0 100% 0 0);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+
 .memory-intro {
   position: fixed;
   inset: 0;
@@ -2269,6 +2335,10 @@ button.button-danger {
     left: 10px;
     padding: 9px 10px;
     font-size: 13px;
+  }
+
+  .loading-name-block span {
+    font-size: clamp(28px, 9vw, 52px);
   }
 
   .memory-intro-stack {

@@ -105,10 +105,14 @@ async function fetchEvents() {
 async function fetchLoveNotes() {
   try {
     const data = await fetchJson(LOVE_NOTES_API_URL);
-    return Array.isArray(data) ? data.filter((note) => typeof note === "string") : [];
+    return Array.isArray(data)
+      ? data.filter((note) => typeof note === "string")
+      : [];
   } catch {
     const data = await fetchJson(loveNotesUrl);
-    return Array.isArray(data) ? data.filter((note) => typeof note === "string") : [];
+    return Array.isArray(data)
+      ? data.filter((note) => typeof note === "string")
+      : [];
   }
 }
 
@@ -352,7 +356,10 @@ function AdminPage() {
       setLoading(true);
 
       try {
-        const [data, notes] = await Promise.all([fetchEvents(), fetchLoveNotes()]);
+        const [data, notes] = await Promise.all([
+          fetchEvents(),
+          fetchLoveNotes(),
+        ]);
         if (!cancelled) {
           setEvents(data);
           setLoveNotes(notes);
@@ -387,7 +394,9 @@ function AdminPage() {
       const text = await file.text();
       const parsed = JSON.parse(text);
       const importedEvents = Array.isArray(parsed) ? parsed : parsed.events;
-      const importedNotes = Array.isArray(parsed?.loveNotes) ? parsed.loveNotes : null;
+      const importedNotes = Array.isArray(parsed?.loveNotes)
+        ? parsed.loveNotes
+        : null;
 
       if (!Array.isArray(importedEvents)) {
         throw new Error("File must contain an events array.");
@@ -729,6 +738,29 @@ function StoryProgressRail({ items, activeKey, visible, label, onSelect }) {
   );
 }
 
+function LoadingExperience() {
+  return (
+    <motion.div
+      className="loading-experience"
+      aria-label="Loading Tri Tran and Han Tran"
+      initial={{ opacity: 1 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0, y: "-4%" }}
+      transition={{ duration: 0.44, ease: "easeOut" }}
+    >
+      <motion.div
+        className="loading-name-block"
+        initial={{ scale: 0.94, rotate: -2 }}
+        animate={{ scale: 1, rotate: 0 }}
+        transition={{ duration: 0.8, ease: [0.18, 0.9, 0.26, 1.08] }}
+      >
+        <span data-text="Tri Tran and">Tri Tran and</span>
+        <span data-text="Han Tran">Han Tran</span>
+      </motion.div>
+    </motion.div>
+  );
+}
+
 function MemoryIntroStack({ photos, visible }) {
   if (!visible || !photos.length) return null;
   const messyPile = [
@@ -800,7 +832,9 @@ function shuffleWithSeed(items, seed) {
 }
 
 function MemoryModeOverlay({ photos, labels, locale, onClose }) {
-  const [deck, setDeck] = useState(() => shuffleWithSeed(photos, createRandomSeed()));
+  const [deck, setDeck] = useState(() =>
+    shuffleWithSeed(photos, createRandomSeed()),
+  );
   const [current, setCurrent] = useState(null);
 
   useEffect(() => {
@@ -885,7 +919,13 @@ function MemoryModeOverlay({ photos, labels, locale, onClose }) {
               <motion.figure
                 key={current.id}
                 className="memory-mode-current"
-                initial={{ opacity: 0, y: -80, x: -120, rotate: 18, scale: 0.82 }}
+                initial={{
+                  opacity: 0,
+                  y: -80,
+                  x: -120,
+                  rotate: 18,
+                  scale: 0.82,
+                }}
                 animate={{
                   opacity: 1,
                   y: 0,
@@ -921,7 +961,9 @@ function MemoryModeOverlay({ photos, labels, locale, onClose }) {
             onClick={pullNext}
             disabled={!remainingCount}
           >
-            {remainingCount ? `Pull next (${remainingCount})` : "No more photos"}
+            {remainingCount
+              ? `Pull next (${remainingCount})`
+              : "No more photos"}
           </button>
           <AnimatePresence mode="wait">
             {current ? (
@@ -979,6 +1021,8 @@ function TimelinePage() {
   const [memoryModeOpen, setMemoryModeOpen] = useState(false);
   const [storyProgressVisible, setStoryProgressVisible] = useState(false);
   const [activeProgressKey, setActiveProgressKey] = useState("");
+  const [loadingExperienceVisible, setLoadingExperienceVisible] =
+    useState(true);
   const [introVisible, setIntroVisible] = useState(false);
 
   const storyRef = useRef(null);
@@ -1021,7 +1065,10 @@ function TimelinePage() {
 
     async function loadEvents() {
       try {
-        const [data, notes] = await Promise.all([fetchEvents(), fetchLoveNotes()]);
+        const [data, notes] = await Promise.all([
+          fetchEvents(),
+          fetchLoveNotes(),
+        ]);
         if (!cancelled) {
           setEvents(data);
           setLoveNotes(notes);
@@ -1296,17 +1343,14 @@ function TimelinePage() {
     [enrichedEvents],
   );
 
-  const introPhotos = useMemo(
-    () => {
-      const rand = seededRandom(introSeed);
-      return [...photoWallItems]
-        .map((photo) => ({ photo, order: rand() }))
-        .sort((a, b) => a.order - b.order)
-        .slice(0, 9)
-        .map(({ photo }) => photo);
-    },
-    [introSeed, photoWallItems],
-  );
+  const introPhotos = useMemo(() => {
+    const rand = seededRandom(introSeed);
+    return [...photoWallItems]
+      .map((photo) => ({ photo, order: rand() }))
+      .sort((a, b) => a.order - b.order)
+      .slice(0, 9)
+      .map(({ photo }) => photo);
+  }, [introSeed, photoWallItems]);
 
   const memoryMatches = useMemo(() => {
     const month = now.getMonth();
@@ -1386,7 +1430,24 @@ function TimelinePage() {
   }, [storyProgressItems, storyProgressVisible]);
 
   useEffect(() => {
-    if (prefersReducedMotion || !introPhotos.length) {
+    if (prefersReducedMotion) {
+      setLoadingExperienceVisible(false);
+      return undefined;
+    }
+
+    const timeout = window.setTimeout(
+      () => setLoadingExperienceVisible(false),
+      6000,
+    );
+    return () => window.clearTimeout(timeout);
+  }, [prefersReducedMotion]);
+
+  useEffect(() => {
+    if (
+      prefersReducedMotion ||
+      loadingExperienceVisible ||
+      !introPhotos.length
+    ) {
       setIntroVisible(false);
       return undefined;
     }
@@ -1394,7 +1455,7 @@ function TimelinePage() {
     setIntroVisible(true);
     const timeout = window.setTimeout(() => setIntroVisible(false), 2800);
     return () => window.clearTimeout(timeout);
-  }, [introPhotos.length, prefersReducedMotion]);
+  }, [introPhotos.length, loadingExperienceVisible, prefersReducedMotion]);
 
   const reduceMotion = prefersReducedMotion;
 
@@ -1406,6 +1467,9 @@ function TimelinePage() {
 
   return (
     <main className="app">
+      <AnimatePresence>
+        {loadingExperienceVisible ? <LoadingExperience /> : null}
+      </AnimatePresence>
       <AnimatePresence>
         {introVisible ? (
           <MemoryIntroStack photos={introPhotos} visible={introVisible} />
