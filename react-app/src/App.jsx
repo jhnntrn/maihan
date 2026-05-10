@@ -1445,7 +1445,7 @@ function TimelinePage() {
 
     const timeout = window.setTimeout(
       () => setLoadingExperienceVisible(false),
-      6000,
+      4000,
     );
     return () => window.clearTimeout(timeout);
   }, [prefersReducedMotion]);

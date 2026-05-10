@@ -128,6 +128,8 @@ main.app {
   align-items: baseline;
   column-gap: clamp(12px, 2.4vw, 34px);
   row-gap: 0;
+  max-width: 96vw;
+  padding: clamp(22px, 4vw, 56px);
   text-align: center;
   filter: drop-shadow(0 18px 28px rgba(58, 12, 45, 0.35));
 }
@@ -139,7 +141,7 @@ main.app {
   font-family: "Homemade Apple", "SFU Century Schoolbook", cursive;
   font-size: clamp(32px, 7.5vw, 104px);
   font-weight: 400;
-  line-height: 1.2;
+  line-height: 1.55;
   letter-spacing: 0;
   white-space: nowrap;
   -webkit-text-stroke: 1px rgba(255, 255, 255, 0.72);
@@ -148,7 +150,8 @@ main.app {
 .loading-name-block span::after {
   content: attr(data-text);
   position: absolute;
-  inset: 0;
+  inset: -0.16em -0.22em -0.2em -0.22em;
+  padding: 0.16em 0.22em 0.2em;
   color: #fff;
   overflow: hidden;
   clip-path: inset(0 100% 0 0);
@@ -157,7 +160,7 @@ main.app {
 }
 
 .loading-name-block span:nth-child(2)::after {
-  animation-delay: 3.5s;
+  animation-delay: 1.5s;
 }
 
 @keyframes letterFill {
