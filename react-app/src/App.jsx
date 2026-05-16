@@ -240,6 +240,20 @@ function normalizeEvents(events) {
   }));
 }
 
+function preloadImage(src) {
+  return new Promise((resolve) => {
+    if (!src) {
+      resolve();
+      return;
+    }
+
+    const image = new Image();
+    image.onload = () => resolve();
+    image.onerror = () => resolve();
+    image.src = src;
+  });
+}
+
 function createRandomSeed() {
   if (typeof crypto !== "undefined" && crypto.getRandomValues) {
     const values = new Uint32Array(1);
@@ -1031,6 +1045,8 @@ function TimelinePage() {
   const [activeProgressKey, setActiveProgressKey] = useState("");
   const [loadingExperienceVisible, setLoadingExperienceVisible] =
     useState(true);
+  const [loaderMinimumDone, setLoaderMinimumDone] = useState(false);
+  const [loaderImagesLoaded, setLoaderImagesLoaded] = useState(false);
   const [introVisible, setIntroVisible] = useState(false);
 
   const storyRef = useRef(null);
@@ -1439,16 +1455,54 @@ function TimelinePage() {
 
   useEffect(() => {
     if (prefersReducedMotion) {
-      setLoadingExperienceVisible(false);
+      setLoaderMinimumDone(true);
       return undefined;
     }
 
     const timeout = window.setTimeout(
-      () => setLoadingExperienceVisible(false),
+      () => setLoaderMinimumDone(true),
       4000,
     );
     return () => window.clearTimeout(timeout);
   }, [prefersReducedMotion]);
+
+  useEffect(() => {
+    if (prefersReducedMotion) {
+      setLoaderImagesLoaded(true);
+      return undefined;
+    }
+
+    if (loadingEvents) {
+      setLoaderImagesLoaded(false);
+      return undefined;
+    }
+
+    let cancelled = false;
+    const sources = Array.from(
+      new Set([
+        "/images/background.jpg",
+        ...photoWallItems.map((photo) => photo.src),
+      ]),
+    );
+
+    setLoaderImagesLoaded(false);
+    Promise.allSettled(sources.map(preloadImage)).then(() => {
+      if (!cancelled) setLoaderImagesLoaded(true);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [loadingEvents, photoWallItems, prefersReducedMotion]);
+
+  useEffect(() => {
+    if (prefersReducedMotion) {
+      setLoadingExperienceVisible(false);
+      return;
+    }
+
+    setLoadingExperienceVisible(!(loaderMinimumDone && loaderImagesLoaded));
+  }, [loaderImagesLoaded, loaderMinimumDone, prefersReducedMotion]);
 
   useEffect(() => {
     if (
