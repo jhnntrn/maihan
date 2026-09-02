@@ -10,11 +10,16 @@
   font-family: var(--body-font);
   --title-font: "Homemade Apple", "SFU Century Schoolbook", cursive;
   --body-font: var(--title-font);
-  --text: #1c1a15;
-  --subtext: #3a372c;
-  --accent: #8a8158;
-  --accent-soft: #c4bc94;
+  --doc-font:
+    "SFU Century Schoolbook", "Century Schoolbook", Century, "Century Gothic",
+    system-ui, -apple-system, "Segoe UI", sans-serif;
+  --text: #000000;
+  --subtext: #1f1f1f;
+  --accent: #000000;
+  --accent-soft: #2b2b2b;
   --intro: #a89f78;
+  --heading: #8a8158;
+  --heading-soft: #a89f78;
   --bg:
     radial-gradient(circle at 20% 20%, #f6f0da, #f1ebd2 38%),
     radial-gradient(circle at 80% 0%, #ece5c6, #faf6e6 42%),
@@ -24,7 +29,7 @@
   --shadow: 0 10px 26px rgba(169, 160, 119, 0.25);
   --note-bg: #fcf9ec;
   --timeline-line: #d0c8a4;
-  --text-glow: 0 2px 26px rgba(219, 213, 189, 1);
+  --text-glow: 0 1px 3px rgba(48, 48, 48, 0.42);
   color: var(--text);
   background-color: #f9f5e4;
 }
@@ -49,7 +54,7 @@ body {
   position: relative;
   color: var(--text);
   overflow-x: hidden;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.16);
+  text-shadow: 0 1px 3px rgba(38, 38, 38, 0.2);
   background-color: transparent;
   isolation: isolate;
 }
@@ -136,14 +141,14 @@ main.app {
 .loading-name-block span {
   position: relative;
   display: inline-block;
-  color: rgba(28, 26, 21, 0.05);
+  color: rgba(0, 0, 0, 0.05);
   font-family: var(--title-font);
   font-size: clamp(32px, 7.5vw, 104px);
   font-weight: 400;
   line-height: 1.55;
   letter-spacing: 0;
   white-space: nowrap;
-  -webkit-text-stroke: 1px rgba(28, 26, 21, 0.42);
+  -webkit-text-stroke: 1px rgba(0, 0, 0, 0.42);
 }
 
 .loading-name-block span::after {
@@ -151,7 +156,7 @@ main.app {
   position: absolute;
   inset: -0.16em -0.22em -0.2em -0.22em;
   padding: 0.16em 0.22em 0.2em;
-  color: #14120e;
+  color: #000000;
   overflow: hidden;
   clip-path: inset(0 100% 0 0);
   animation: letterFill 1.5s ease-in-out forwards;
@@ -212,7 +217,9 @@ main.app {
 }
 
 h1 {
+  color: var(--heading);
   margin: 8px 0 10px;
+  padding: 0.1em 0.06em 0.16em;
   font-size: clamp(34px, 6.4vw, 58px);
   line-height: 1.32;
   letter-spacing: 0;
@@ -236,10 +243,17 @@ h3 {
 }
 
 h2 {
-  color: var(--intro);
+  color: var(--heading-soft);
   font-size: clamp(23px, 4vw, 34px);
-  line-height: 1.34;
+  line-height: 1.4;
   margin: 0;
+  padding: 0.1em 0.06em 0.18em;
+}
+
+h3 {
+  color: var(--heading);
+  line-height: 1.4;
+  padding: 0.08em 0.06em 0.16em;
 }
 
 .sub {
@@ -268,9 +282,10 @@ h2 {
 
 .sentence-text {
   margin: 0;
+  padding: 0.25em 0.1em;
   font-size: clamp(23px, 4.6vw, 34px);
-  line-height: 1.45;
-  color: var(--text);
+  line-height: 1.6;
+  color: var(--heading);
 }
 
 .sentence-intro {
@@ -289,7 +304,7 @@ h2 {
   display: inline-flex;
   align-items: baseline;
   font-weight: 700;
-  color: var(--accent);
+  color: var(--heading);
   white-space: nowrap;
   perspective: 800px;
   gap: 6px;
@@ -775,7 +790,7 @@ h2 {
   color: var(--accent);
   font-size: 14px;
   font-weight: 700;
-  text-shadow: 0 1px 10px rgba(255, 255, 255, 0.5);
+  text-shadow: 0 1px 3px rgba(48, 48, 48, 0.3);
   box-shadow: 0 10px 24px rgba(172, 163, 124, 0.24);
 }
 
@@ -918,7 +933,9 @@ h2 {
 
 .totals-heading {
   font-family: var(--title-font);
+  color: var(--heading-soft);
   margin: 12px 0 -2px;
+  padding: 0.08em 0.06em 0.16em;
   font-size: clamp(20px, 3.4vw, 28px);
   line-height: 1.36;
   color: var(--intro);
@@ -1258,14 +1275,14 @@ h2 {
   align-items: center;
   justify-content: center;
   position: relative;
-  padding: 4px 12px;
+  padding: 7px 16px 9px;
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 999px;
-  color: var(--accent);
+  color: var(--heading);
   font-weight: 700;
   font-size: clamp(16px, 3vw, 20px);
-  line-height: 1.15;
+  line-height: 1.4;
   letter-spacing: 0.02em;
   box-shadow: var(--shadow);
   margin: 0 auto;
@@ -2197,19 +2214,19 @@ button.button-edit,
 .link-button.button-import {
   background: rgba(199, 192, 161, 0.34);
   border-color: rgba(172, 163, 124, 0.58);
-  color: #25231c;
+  color: #000000;
 }
 
 .link-button.button-download {
   background: rgba(199, 192, 161, 0.18);
   border-color: rgba(172, 163, 124, 0.45);
-  color: #2e2b22;
+  color: #000000;
 }
 
 button.button-cancel {
   background: rgba(252, 249, 235, 0.38);
   border-color: rgba(172, 163, 124, 0.34);
-  color: #25231c;
+  color: #000000;
 }
 
 button.button-danger {
@@ -2477,4 +2494,65 @@ button.button-danger {
 .theme-link:hover {
   color: var(--text);
   transform: translateY(-1px);
+}
+
+/* The admin tools are for reading and editing data, not for atmosphere. */
+.admin-app,
+.admin-app h1,
+.admin-app h2,
+.admin-app h3,
+.admin-app button,
+.admin-app input,
+.admin-app textarea,
+.admin-app select {
+  font-family: var(--doc-font);
+}
+
+.admin-app h1 {
+  font-size: clamp(38px, 7vw, 62px);
+  line-height: 1.02;
+}
+
+.admin-app h2,
+.admin-app h3 {
+  line-height: 1.12;
+}
+
+/* The handwriting face sets a much larger optical size than the old serif,
+   so text blocks need room around them to stop feeling cramped. */
+.sub,
+.eyebrow,
+.timeline-note,
+.note-text,
+.event-name,
+.event-desc,
+.event-date,
+.total-label,
+.total-value,
+.story-progress-label,
+.memory-mode-info,
+.memory-mode-count,
+.memory-preview,
+.photo-wall-header p {
+  padding: 0.14em 0.1em 0.2em;
+  line-height: 1.55;
+}
+
+.event-name {
+  padding-bottom: 0.24em;
+  line-height: 1.4;
+}
+
+.event-desc,
+.note-text {
+  line-height: 1.75;
+}
+
+.total-item {
+  padding: 0.12em 0.1em 0.22em;
+}
+
+.photo-wall-header h2,
+.photo-wall-header p {
+  padding-left: 0.1em;
 }

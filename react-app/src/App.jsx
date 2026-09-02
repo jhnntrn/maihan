@@ -473,7 +473,7 @@ function AdminPage() {
   }
 
   return (
-    <main className="app">
+    <main className="app admin-app">
       <header>
         <h1>Event Studio</h1>
         <p className="sub">Manage timeline events, love notes, and pictures.</p>
