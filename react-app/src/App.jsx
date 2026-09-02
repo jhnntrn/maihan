@@ -1,8 +1,10 @@
-import { memo, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState, useLayoutEffect } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { BASE_DATE, clampToStop, diffParts } from "../../shared/dateDiff";
 import eventsUrl from "../../shared/events.json?url";
 import EventAdmin from "./EventAdmin";
+import currentCss from "./styles.css?raw";
+import originalCss from "./styles.original.css?raw";
 import defaultLoveNotes from "../../shared/loveNotes.json";
 import loveNotesUrl from "../../shared/loveNotes.json?url";
 import Event from "./Event";
@@ -12,58 +14,30 @@ const EVENTS_API_URL = "/api/events";
 const LOVE_NOTES_API_URL = "/api/love-notes";
 
 const COPY = {
-  en: {
-    sentenceIntro: "We were together for ",
-    conjunction: " and ",
-    totalsHeading: "Which came to",
-    unitLabels: {
-      years: ["year", "years"],
-      months: ["month", "months"],
-      days: ["day", "days"],
-      hours: ["hour", "hours"],
-      minutes: ["minute", "minutes"],
-      seconds: ["second", "seconds"],
-    },
-    totalDays: "days",
-    totalHours: "hours",
-    totalMinutes: "minutes",
-    totalSeconds: "seconds",
-    timelineHeading: "Our story <3",
-    onThisDayHeading: "On this day",
-    thisMonthHeading: "This month in our memories",
-    storyProgress: "Story progress",
-    memoryMode: "Memory mode",
-    closeMemoryMode: "Close memory mode",
-    loadingEvents: "Loading events...",
-    errorEvents: "Could not load events.",
-    closePhoto: "Close photo",
+  sentenceIntro: "We were together for ",
+  conjunction: " and ",
+  totalsHeading: "Which came to",
+  unitLabels: {
+    years: ["year", "years"],
+    months: ["month", "months"],
+    days: ["day", "days"],
+    hours: ["hour", "hours"],
+    minutes: ["minute", "minutes"],
+    seconds: ["second", "seconds"],
   },
-  vi: {
-    sentenceIntro: "Bọn mình đã bên nhau tất cả",
-    conjunction: " và ",
-    totalsHeading: "là",
-    unitLabels: {
-      years: ["năm", "năm"],
-      months: ["tháng", "tháng"],
-      days: ["ngày", "ngày"],
-      hours: ["giờ", "giờ"],
-      minutes: ["phút", "phút"],
-      seconds: ["giây", "giây"],
-    },
-    totalDays: "ngày",
-    totalHours: "giờ",
-    totalMinutes: "phút",
-    totalSeconds: "giây",
-    timelineHeading: "Câu chuyện của tụi mình <3",
-    onThisDayHeading: "Ngày này năm xưa",
-    thisMonthHeading: "Tháng này trong kỷ niệm",
-    storyProgress: "Tiến trình câu chuyện",
-    memoryMode: "Chế độ kỷ niệm",
-    closeMemoryMode: "Đóng chế độ kỷ niệm",
-    loadingEvents: "Đang tải sự kiện...",
-    errorEvents: "Không thể tải sự kiện.",
-    closePhoto: "Đóng ảnh",
-  },
+  totalDays: "days",
+  totalHours: "hours",
+  totalMinutes: "minutes",
+  totalSeconds: "seconds",
+  timelineHeading: "Our story <3",
+  onThisDayHeading: "On this day",
+  thisMonthHeading: "This month in our memories",
+  storyProgress: "Story progress",
+  memoryMode: "Memory mode",
+  closeMemoryMode: "Close memory mode",
+  loadingEvents: "Loading events...",
+  errorEvents: "Could not load events.",
+  closePhoto: "Close photo",
 };
 
 const CARD_VARIANTS = {
@@ -1024,10 +998,6 @@ function TimelinePage() {
       ? window.matchMedia(MOBILE_QUERY).matches
       : false,
   );
-  const [language, setLanguage] = useState(() => {
-    if (typeof window === "undefined") return "en";
-    return localStorage.getItem("lang") || "vi";
-  });
   const randomSeed = useMemo(() => createRandomSeed(), []);
   const introSeed = useMemo(() => createRandomSeed(), []);
   const [now, setNow] = useState(() => new Date());
@@ -1066,15 +1036,6 @@ function TimelinePage() {
     mediaQuery.addEventListener("change", updateIsMobile);
     return () => mediaQuery.removeEventListener("change", updateIsMobile);
   }, []);
-
-  useEffect(() => {
-    if (typeof document !== "undefined") {
-      document.documentElement.lang = language === "vi" ? "vi" : "en";
-    }
-    if (typeof localStorage !== "undefined") {
-      localStorage.setItem("lang", language);
-    }
-  }, [language]);
 
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 1000);
@@ -1116,8 +1077,8 @@ function TimelinePage() {
     };
   }, []);
 
-  const locale = language === "vi" ? "vi-VN" : undefined;
-  const t = COPY[language] || COPY.en;
+  const locale = "en-US";
+  const t = COPY;
   const mobileLightMotion = isMobile && !prefersReducedMotion;
 
   const clockNow = useMemo(() => clampToStop(now), [now]);
@@ -1590,30 +1551,6 @@ function TimelinePage() {
       >
         {t.memoryMode}
       </button>
-      <motion.button
-        type="button"
-        className="lang-toggle"
-        data-lang={language}
-        onClick={() => setLanguage((prev) => (prev === "en" ? "vi" : "en"))}
-        aria-label="Toggle language"
-        whileTap={{ scale: 0.95 }}
-        whileHover={{ scale: 1.02 }}
-        transition={{ type: "spring", stiffness: 300, damping: 18 }}
-      >
-        <span className="lang-pill">
-          <span className={`lang-label ${language === "vi" ? "active" : ""}`}>
-            VI
-          </span>
-          <span className={`lang-label ${language === "en" ? "active" : ""}`}>
-            EN
-          </span>
-          <motion.span
-            className="lang-thumb"
-            animate={{ x: language === "vi" ? "0%" : "100%" }}
-            transition={{ type: "spring", stiffness: 320, damping: 24 }}
-          />
-        </span>
-      </motion.button>
       <header className="hero-spacer" aria-hidden="true" />
 
       <ClockSentence
@@ -1670,12 +1607,8 @@ function TimelinePage() {
       {photoWallItems.length ? (
         <section className="photo-wall" aria-label="Photo wall">
           <div className="photo-wall-header">
-            <h2>{language === "vi" ? "Tường ảnh" : "Photo wall"}</h2>
-            <p>
-              {language === "vi"
-                ? "Một góc nhỏ gom lại những khoảnh khắc của tụi mình."
-                : "A little corner for the moments we keep coming back to."}
-            </p>
+            <h2>Photo wall</h2>
+            <p>A little corner for the moments we keep coming back to.</p>
           </div>
           <div className="photo-wall-grid">
             {photoWallItems.map((photo, index) => (
@@ -1751,5 +1684,38 @@ export default function App() {
     return () => window.removeEventListener("popstate", handlePop);
   }, []);
 
-  return path.startsWith("/admin") ? <AdminPage /> : <TimelinePage />;
+  const isOriginal = path.startsWith("/original");
+
+  // Only one stylesheet is ever mounted, so the two themes never cascade
+  // into each other.
+  useLayoutEffect(() => {
+    let node = document.getElementById("theme-sheet");
+    if (!node) {
+      node = document.createElement("style");
+      node.id = "theme-sheet";
+      document.head.appendChild(node);
+    }
+    node.textContent = isOriginal ? originalCss : currentCss;
+  }, [isOriginal]);
+
+  const navigate = (to) => {
+    window.history.pushState({}, "", to);
+    setPath(to);
+    window.scrollTo({ top: 0 });
+  };
+
+  if (path.startsWith("/admin")) return <AdminPage />;
+
+  return (
+    <>
+      <button
+        type="button"
+        className="theme-link"
+        onClick={() => navigate(isOriginal ? "/" : "/original")}
+      >
+        {isOriginal ? "back to now" : "the original"}
+      </button>
+      <TimelinePage />
+    </>
+  );
 }
