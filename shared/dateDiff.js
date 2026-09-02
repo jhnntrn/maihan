@@ -6,6 +6,14 @@ const MS_PER_DAY = 24 * MS_PER_HOUR;
 const BASE_DATE_ISO = "2025-03-31T22:23:00+07:00"; // March 31, 2025 10:23 PM GMT+7
 export const BASE_DATE = new Date(BASE_DATE_ISO);
 
+// The counter is frozen here; time after this instant no longer counts.
+const STOP_DATE_ISO = "2026-09-01T17:45:00+07:00"; // Sep 1, 2026 5:45 PM GMT+7
+export const STOP_DATE = new Date(STOP_DATE_ISO);
+
+export function clampToStop(date) {
+  return date > STOP_DATE ? STOP_DATE : date;
+}
+
 function addYears(date, years) {
   const d = new Date(date.getTime());
   d.setFullYear(d.getFullYear() + years);

@@ -1,6 +1,6 @@
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { BASE_DATE, diffParts } from "../../shared/dateDiff";
+import { BASE_DATE, clampToStop, diffParts } from "../../shared/dateDiff";
 import eventsUrl from "../../shared/events.json?url";
 import EventAdmin from "./EventAdmin";
 import defaultLoveNotes from "../../shared/loveNotes.json";
@@ -13,9 +13,9 @@ const LOVE_NOTES_API_URL = "/api/love-notes";
 
 const COPY = {
   en: {
-    sentenceIntro: "We have been together for ",
+    sentenceIntro: "We were together for ",
     conjunction: " and ",
-    totalsHeading: "Which means",
+    totalsHeading: "Which came to",
     unitLabels: {
       years: ["year", "years"],
       months: ["month", "months"],
@@ -39,9 +39,9 @@ const COPY = {
     closePhoto: "Close photo",
   },
   vi: {
-    sentenceIntro: "Bọn mình đã bên nhau được",
+    sentenceIntro: "Bọn mình đã bên nhau tất cả",
     conjunction: " và ",
-    totalsHeading: "là khoảng",
+    totalsHeading: "là",
     unitLabels: {
       years: ["năm", "năm"],
       months: ["tháng", "tháng"],
@@ -679,7 +679,7 @@ const Totals = memo(function Totals({ totals, prevTotalsRef, labels }) {
   );
 
   return (
-    <section className="totals" aria-label="Total time together">
+    <section className="totals" aria-label="Total time we were together">
       {items.map((t) => {
         const prev = prevTotalsRef.current?.[t.key] ?? t.value;
         const padLen = Math.max(t.value.length, String(prev).length);
@@ -1120,7 +1120,9 @@ function TimelinePage() {
   const t = COPY[language] || COPY.en;
   const mobileLightMotion = isMobile && !prefersReducedMotion;
 
-  const diff = useMemo(() => diffParts(BASE_DATE, now), [now]);
+  const clockNow = useMemo(() => clampToStop(now), [now]);
+
+  const diff = useMemo(() => diffParts(BASE_DATE, clockNow), [clockNow]);
 
   const visibleUnits = useMemo(() => {
     const labelFor = (key, value) => {
@@ -1179,7 +1181,7 @@ function TimelinePage() {
   }, [diff]);
 
   const totals = useMemo(() => {
-    const ms = Math.max(0, now.getTime() - BASE_DATE.getTime());
+    const ms = Math.max(0, clockNow.getTime() - BASE_DATE.getTime());
     const totalSeconds = Math.floor(ms / 1000);
     const totalMinutes = Math.floor(ms / (1000 * 60));
     const totalHours = Math.floor(ms / (1000 * 60 * 60));
@@ -1191,7 +1193,7 @@ function TimelinePage() {
       minutes: String(totalMinutes),
       seconds: String(totalSeconds),
     };
-  }, [now]);
+  }, [clockNow]);
 
   useEffect(() => {
     prevTotalsRef.current = totals;
